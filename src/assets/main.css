@@ -1,0 +1,90 @@
+/* ==========================
+   重置樣式
+   ========================== */
+body,
+h1,
+h2,
+h3,
+h4,
+p,
+ul,
+li {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* 設定全站背景與字體 */
+body {
+  font-size: 1.2rem;
+  font-family: serif; /* 預設字體 */
+
+  background-image: url("/images/system/背景圖片.png");
+
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+/* ==========================
+   通用樣式
+   ========================== */
+
+/* 👇 修改這裡：配合 App.vue 的名稱 (.site-wrapper) */
+.site-wrapper {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+
+section {
+  padding: 2rem;
+  margin: 2rem 0;
+}
+
+h2 {
+  text-align: center;
+  color: #444;
+  margin-bottom: 1rem;
+}
+
+h3 {
+  margin: 1em 0 -0.5em;
+  color: #444;
+}
+
+html {
+  font-size: 16px;
+}
+
+p {
+  line-height: 1.8;
+  color: #444;
+}
+
+/* ==========================
+   排版修正 (Sticky Footer)
+   ========================== */
+
+/* 1. 確保 wrapper 至少跟螢幕一樣高 */
+.site-wrapper {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh; /* 建議改用 100vh (視窗高度)，比 100% 更穩 */
+}
+
+/* 2. 關鍵！讓中間內容區自動長高，把 Footer 推到底部 */
+.main-content {
+  flex: 1; /* 這行最重要！意思是「剩餘空間我全包了」 */
+  width: 100%; /* 確保寬度正常 */
+  max-width: 1200px;
+  margin: 0 auto; /* 置中 */
+  padding: 20px;
+  box-sizing: border-box;
+}
