@@ -42,7 +42,7 @@ const categories = [
   { name: "時事感想", color: "#4682b4" },
   { name: "文藝創作", color: "#27408b" },
   { name: "公告與剪影", color: "#6a5acd" },
-  { name: "主題文章", color: "#7d6c29" },
+  { name: "封面故事", color: "#7d6c29" },
   { name: "光影時刻", color: "#7d6c29" },
   { name: "實驗園地", color: "#db7093" },
 ];
@@ -171,7 +171,13 @@ const removeFootnote = (index) => {
   form.value.footnotes.forEach((note, idx) => (note.id = idx + 1));
 };
 
-const insertOrWrap = async (prefix, suffix, defaultText = "文字") => {
+const insertOrWrap = async (
+  prefix,
+  suffix,
+  defaultText = "文字",
+  togglePrefix = null,
+  toggleSuffix = null
+) => {
   const textarea = textareaRef.value;
   if (!textarea) return;
 
@@ -180,23 +186,27 @@ const insertOrWrap = async (prefix, suffix, defaultText = "文字") => {
   const originalText = form.value.content;
   const selectedText = originalText.substring(start, end);
 
+  // 檢查標籤使用 togglePrefix/toggleSuffix，若無則使用 prefix/suffix
+  const checkPrefix = togglePrefix || prefix;
+  const checkSuffix = toggleSuffix || suffix;
+
   let newText = "";
   let newSelectionStart = 0;
   let newSelectionEnd = 0;
 
-  // 1. 檢查選取的文字是否已經被標籤包裹
+  // 1. 檢查選取的文字是否已經被標籤包裹 (檢查前後是否匹配)
   const isWrapped =
-    originalText.substring(start - prefix.length, start) === prefix &&
-    originalText.substring(end, end + suffix.length) === suffix;
+    originalText.substring(start - checkPrefix.length, start) === checkPrefix &&
+    originalText.substring(end, end + checkSuffix.length) === checkSuffix;
 
   if (isWrapped) {
     // 情況 1: 移除標籤 (Toggle Off)
     newText =
-      originalText.substring(0, start - prefix.length) +
+      originalText.substring(0, start - checkPrefix.length) +
       selectedText +
-      originalText.substring(end + suffix.length);
+      originalText.substring(end + checkSuffix.length);
 
-    newSelectionStart = start - prefix.length;
+    newSelectionStart = start - checkPrefix.length;
     newSelectionEnd = newSelectionStart + selectedText.length;
   } else if (selectedText.length > 0) {
     // 情況 2: 包裹選取的文字 (Wrap)
@@ -243,7 +253,7 @@ const insertBlock = async (template) => {
   textarea.selectionStart = textarea.selectionEnd = start + template.length;
 };
 
-// 【修改】tools 陣列：加入「一般引言」
+// 【修改】tools 陣列：加入「置右」和「小字體」
 const tools = [
   { label: "H2 副標", action: () => insertOrWrap("## ", "\n", "輸入標題") },
   { label: "H3 小標", action: () => insertOrWrap("### ", "\n", "輸入標題") },
@@ -251,18 +261,38 @@ const tools = [
   { label: "斜體", action: () => insertOrWrap("<i>", "</i>", "斜體文字") },
   { label: "標楷體", action: () => insertOrWrap("*", "*", "標楷體文字") },
   { label: "註釋號碼", action: () => insertOrWrap("[^", "]", "1") },
-  // 移到這裡，並使用 insertOrWrap
   {
     label: "一般引言",
     action: () =>
       insertOrWrap(
         "<blockquote>\n",
-        '\n<div class="rel">── 出處</div>\n</blockquote>\n', // 【修正 1】移除 <div class="rel"> 前的兩個空格
+        '\n<div class="rel">── 出處</div>\n</blockquote>\n',
         "引用的內文..."
       ),
   },
   { label: "去除縮排", action: () => insertOrWrap('<p class="no-indent">', "</p>", "無縮排文字") },
   { label: "分隔線", action: () => insertBlock('\n<div class="custom-divider"></div>\n') },
+
+  // --- 新增的功能 ---
+  {
+    label: "置右",
+    action: () => {
+      const prefix = '<span style="display: block; text-align: right;">';
+      const suffix = "</span>";
+      // 由於 text-align: right 是 span 的樣式，所以檢查時只需要 prefix/suffix 即可
+      insertOrWrap(prefix, suffix, "請在此輸入置右文字", prefix, suffix);
+    },
+  },
+  {
+    label: "小字體",
+    action: () => {
+      const prefix = '<span style="font-size: 1rem; font-family: serif;">';
+      const suffix = "</span>";
+      // 由於 font-size/font-family 是 span 的樣式，所以檢查時只需要 prefix/suffix 即可
+      insertOrWrap(prefix, suffix, "請在此輸入小字體文字", prefix, suffix);
+    },
+  },
+  // --------------------
 ];
 
 const components = [
