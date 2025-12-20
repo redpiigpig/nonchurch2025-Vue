@@ -2,6 +2,7 @@
 import { ref, onMounted, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { supabase } from "../supabase";
+import MainLayout from "../components/MainLayout.vue";
 
 const route = useRoute();
 const router = useRouter();
@@ -68,37 +69,21 @@ const highlightFull = (content, searchTerm) => {
   return content.replace(regex, '<span class="highlight-text">$1</span>');
 };
 
-// 【修改重點】優化後的摘要截取函式
 const highlightSnippet = (content, searchTerm) => {
   if (!content) return "";
-
-  // 1. 先移除所有 HTML 標籤 (<div...>, <img...>, </a> 等)
-  // 將標籤替換為 " " (空白)，避免文字黏在一起 (例如 </div><div> 變成連字)
-  let plainText = content.replace(/<[^>]+>/g, " ");
-
-  // 2. 移除 Markdown 圖片語法 ![alt](url) (如果有的話)
-  plainText = plainText.replace(/!\[.*?\]\(.*?\)/g, " ");
-
-  // 3. 整理空白：把連續的換行或空白縮減成一個空格
-  plainText = plainText.replace(/\s+/g, " ").trim();
-
-  // -----------------------------------------------------
-  // 以下邏輯保持不變：在純文字中找關鍵字並截取
-  // -----------------------------------------------------
-
-  // 如果沒搜尋關鍵字，回傳前 300 字
+  let plainText = content
+    .replace(/<[^>]+>/g, " ")
+    .replace(/!\[.*?\]\(.*?\)/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
   if (!searchTerm) return plainText.substring(0, 300) + "...";
 
   const lowerContent = plainText.toLowerCase();
   const lowerTerm = searchTerm.toLowerCase();
   const index = lowerContent.indexOf(lowerTerm);
 
-  // 如果找不到 (可能關鍵字只存在於被我們刪掉的標籤屬性中)，就回傳開頭
-  if (index === -1) {
-    return plainText.substring(0, 250) + "...";
-  }
+  if (index === -1) return plainText.substring(0, 250) + "...";
 
-  // 截取前後文 (前後 150 字)
   const start = Math.max(0, index - 150);
   const end = Math.min(plainText.length, index + searchTerm.length + 150);
   let snippet = plainText.substring(start, end);
@@ -106,124 +91,93 @@ const highlightSnippet = (content, searchTerm) => {
   if (start > 0) snippet = "..." + snippet;
   if (end < plainText.length) snippet = snippet + "...";
 
-  // 高亮關鍵字
   const regex = new RegExp(`(${searchTerm})`, "gi");
   return snippet.replace(regex, '<span class="highlight-text">$1</span>');
 };
 
 watch(() => route.query, fetchResults);
-onMounted(fetchResults);
+onMounted(() => {
+  fetchResults();
+});
 </script>
 
 <template>
-  <div class="search-page-container">
-    <div class="search-header-section">
-      <div class="search-links">
-        <span class="link-label">熱門關鍵字：</span>
-        <a
-          href="#"
-          @click.prevent="
-            inputQuery = '林貝克';
-            inputType = 'title';
-            handleSearch();
-          "
-          class="keyword-link"
-          >#林貝克</a
-        >
-        <a
-          href="#"
-          @click.prevent="
-            inputQuery = '身體';
-            inputType = 'keyword';
-            handleSearch();
-          "
-          class="keyword-link"
-          >#身體經驗</a
-        >
-        <a
-          href="#"
-          @click.prevent="
-            inputQuery = '後自由';
-            inputType = 'content';
-            handleSearch();
-          "
-          class="keyword-link"
-          >#後自由神學</a
-        >
+  <MainLayout>
+    <div class="search-page-container">
+      <div class="search-header-section">
+        <div class="search-box">
+          <select v-model="inputType" class="search-select">
+            <option value="title">搜尋文章標題</option>
+            <option value="author">搜尋作者</option>
+            <option value="content">搜尋文章全文</option>
+            <option value="keyword">搜尋關鍵字</option>
+          </select>
+
+          <input
+            v-model="inputQuery"
+            @keyup.enter="handleSearch"
+            type="text"
+            placeholder="輸入關鍵字..."
+            class="search-input"
+          />
+
+          <button @click="handleSearch" class="btn">搜尋</button>
+        </div>
       </div>
 
-      <div class="search-box">
-        <select v-model="inputType" class="search-select">
-          <option value="title">搜尋文章標題</option>
-          <option value="author">搜尋作者</option>
-          <option value="content">搜尋文章全文</option>
-          <option value="keyword">搜尋關鍵字</option>
-        </select>
+      <hr class="divider" />
 
-        <input
-          v-model="inputQuery"
-          @keyup.enter="handleSearch"
-          type="text"
-          placeholder="輸入關鍵字..."
-          class="search-input"
-        />
-
-        <button @click="handleSearch" class="btn">搜尋</button>
+      <div class="result-status">
+        <h2 v-if="currentKeyword">
+          用 <span class="query-tag">「{{ currentKeyword }}」</span> 搜尋{{
+            fieldLabels[currentField]
+          }}的結果
+          <span class="count-tag">{{ results.length }} 筆</span>
+        </h2>
+        <h2 v-else>請輸入關鍵字進行搜尋</h2>
       </div>
-    </div>
 
-    <hr class="divider" />
+      <div v-if="loading" class="loading-state">搜尋中🕊️...</div>
 
-    <div class="result-status">
-      <h2 v-if="currentKeyword">
-        用 <span class="query-tag">「{{ currentKeyword }}」</span> 搜尋{{
-          fieldLabels[currentField]
-        }}的結果
-        <span class="count-tag">{{ results.length }} 筆</span>
-      </h2>
-      <h2 v-else>請輸入關鍵字進行搜尋</h2>
-    </div>
+      <div v-else-if="results.length === 0 && currentKeyword" class="no-result">
+        找不到相關內容，請嘗試其他關鍵字。
+      </div>
 
-    <div v-if="loading" class="loading-state">搜尋中🕊️...</div>
+      <div v-else class="results-list">
+        <div
+          v-for="article in results"
+          :key="article.id"
+          class="result-card"
+          title="點擊觀看文章全文"
+        >
+          <router-link :to="`/articles/${article.id}`" class="card-link">
+            <div class="meta-info">第{{ article.issue }}期：{{ article.issue_title }}</div>
 
-    <div v-else-if="results.length === 0 && currentKeyword" class="no-result">
-      找不到相關內容，請嘗試其他關鍵字。
-    </div>
+            <div class="title-row">
+              <h3 class="article-title-group">
+                <span v-html="highlightFull(article.title, currentKeyword)"></span>
+                <span v-if="article.subtitle" class="title-separator"></span>
+                <span
+                  v-if="article.subtitle"
+                  class="article-subtitle"
+                  v-html="highlightFull(article.subtitle, currentKeyword)"
+                ></span>
+              </h3>
 
-    <div v-else class="results-list">
-      <div
-        v-for="article in results"
-        :key="article.id"
-        class="result-card"
-        title="點擊觀看文章全文"
-      >
-        <router-link :to="`/articles/${article.id}`" class="card-link">
-          <div class="meta-info">第{{ article.issue }}期：{{ article.issue_title }}</div>
-
-          <div class="title-row">
-            <h3 class="article-title-group">
-              <span v-html="highlightFull(article.title, currentKeyword)"></span>
-              <span v-if="article.subtitle" class="title-separator"></span>
-              <span
-                v-if="article.subtitle"
-                class="article-subtitle"
-                v-html="highlightFull(article.subtitle, currentKeyword)"
-              ></span>
-            </h3>
-
-            <div class="article-author">
-              作者：<span v-html="highlightFull(article.author, currentKeyword)"></span>
+              <div class="article-author">
+                作者：<span v-html="highlightFull(article.author, currentKeyword)"></span>
+              </div>
             </div>
-          </div>
 
-          <div
-            class="article-snippet"
-            v-html="highlightSnippet(article.content, currentKeyword)"
-          ></div>
-        </router-link>
+            <div
+              class="article-snippet"
+              v-html="highlightSnippet(article.content, currentKeyword)"
+            ></div>
+          </router-link>
+        </div>
       </div>
     </div>
-  </div>
+  </MainLayout>
 </template>
 
 <style>
@@ -245,24 +199,8 @@ onMounted(fetchResults);
   text-align: center;
   margin-bottom: 20px;
 }
-.search-links {
-  margin-bottom: 10px;
-  font-size: 0.95rem;
-}
-.link-label {
-  color: #666;
-  font-weight: bold;
-}
-.keyword-link {
-  display: inline-block;
-  margin: 0 0.5rem;
-  color: #007bff;
-  text-decoration: none;
-  font-family: "Times New Roman", serif;
-}
-.keyword-link:hover {
-  text-decoration: underline;
-}
+
+/* ... 搜尋框樣式 ... */
 .search-box {
   display: inline-flex;
   justify-content: center;
@@ -357,14 +295,14 @@ onMounted(fetchResults);
 }
 .article-title-group {
   font-size: 1.4rem;
-  color: #444;
+  color: #007bff;
   margin: 0;
   font-family: "Times New Roman", serif;
   line-height: 1.4;
   flex-grow: 1;
 }
 .article-subtitle {
-  color: #444;
+  color: #007bff;
   font-weight: bold;
   font-size: 1.2rem;
 }

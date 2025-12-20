@@ -4,8 +4,9 @@ import { useRoute } from "vue-router";
 import { marked } from "marked";
 import markedFootnote from "marked-footnote";
 import { supabase } from "../supabase";
+// 👇 1. 引入 Layout
+import MainLayout from "../components/MainLayout.vue";
 
-// 【修改】設定 prefixId，確保我們手動產生的連結 ID 能對應到 marked 產生的列表
 marked.use(markedFootnote({ prefixId: "footnote-" }));
 
 const route = useRoute();
@@ -68,20 +69,14 @@ const updateMetaTags = (seoData, article) => {
 };
 
 watch(
-  () => route.params.id, // 監聽 article ID 參數
+  () => route.params.id,
   async (newId, oldId) => {
-    // 確保 ID 存在且確實發生變化
     if (newId && newId !== oldId) {
       loading.value = true;
-
-      // 重新呼叫載入文章函數
       const fetchedArticle = await fetchArticleData(newId);
-
       if (fetchedArticle) {
         article.value = fetchedArticle;
         updateMetaTags(article.value.seo, article.value);
-
-        // 手動更新網頁標題
         const number = article.value.id.replace(article.value.title, "");
         document.title = `${number} ${article.value.title} - 無境界者雜誌`;
       }
@@ -92,8 +87,6 @@ watch(
 
 onMounted(async () => {
   loading.value = true;
-
-  // 預覽模式檢查
   if (route.name === "article-preview") {
     const localData = localStorage.getItem("preview_article");
     if (localData) {
@@ -107,13 +100,11 @@ onMounted(async () => {
   const articleId = route.params.id;
   const fetchPromise = fetchArticleData(articleId);
   const delayPromise = new Promise((resolve) => setTimeout(resolve, 2000));
-
   const [fetchedArticle] = await Promise.all([fetchPromise, delayPromise]);
 
   if (fetchedArticle) {
     article.value = fetchedArticle;
     updateMetaTags(article.value.seo, article.value);
-
     const number = article.value.id.replace(article.value.title, "");
     document.title = `${number} ${article.value.title} - 無境界者雜誌`;
   } else {
@@ -123,10 +114,8 @@ onMounted(async () => {
   loading.value = false;
 });
 
-// 【新增】輔助函式：處理標題或備註中的 [^1] 格式
 const formatTextWithFootnote = (text) => {
   if (!text) return "";
-  // 將 [^數字] 替換為指向底部註釋的 HTML 連結
   return text.replace(/\[\^(\d+)\]/g, (match, id) => {
     return `<sup class="footnote-ref"><a href="#footnote-${id}" id="footnote-ref-${id}">${id}</a></sup>`;
   });
@@ -134,29 +123,19 @@ const formatTextWithFootnote = (text) => {
 
 const htmlContent = computed(() => {
   if (!article.value || !article.value.content) return "";
-
-  // 1. 取得原始內文
   let fullText = article.value.content;
-
-  // 2. 【關鍵步驟】全域替換：在解析 Markdown 之前，先把內文所有的 [^數字] 轉成 HTML 連結
-  // 這樣無論是在 <div class="book-box"> 還是 <table> 裡面，都能正確變身
   fullText = fullText.replace(/\[\^(\d+)\]/g, (match, id) => {
     return `<sup class="footnote-ref"><a href="#footnote-${id}" id="footnote-ref-${id}">${id}</a></sup>`;
   });
 
-  // 3. 解析 Markdown (這時候 marked 看到的是已經變成 <sup...> 的 HTML，會直接保留它)
   let parsedHtml = marked.parse(fullText, {
     gfm: true,
     breaks: true,
   });
 
-  // 4. 【手動生成頁尾】
-  // 因為我們繞過了 marked-footnote，所以要自己把資料庫裡的 footnotes 陣列拼成 HTML 列表
-  // 這樣能確保 CSS 樣式 (.footnotes ol li) 依然生效
   if (article.value.footnotes && article.value.footnotes.length > 0) {
     const listItems = article.value.footnotes
       .map((note) => {
-        // 加上返回箭頭 ↩
         return `<li id="footnote-${note.id}">
           <p>
             ${note.text}
@@ -166,7 +145,6 @@ const htmlContent = computed(() => {
       })
       .join("");
 
-    // 拼接到文章最後面
     parsedHtml += `
       <div class="footnotes">
         <hr />
@@ -185,7 +163,6 @@ const keywordContent = computed(() => {
 
 const categoryColor = computed(() => {
   if (!article.value || !article.value.category) return "#ff8000";
-
   const colorMap = {
     專題文章: "#8b0000",
     評論與回應: "#ff8000",
@@ -198,13 +175,12 @@ const categoryColor = computed(() => {
     光影時刻: "#7d6c29",
     實驗園地: "#db7093",
   };
-
   return colorMap[article.value.category] || "#ff8000";
 });
 </script>
 
 <template>
-  <div class="article-page">
+  <MainLayout>
     <div v-if="loading" class="loading-state">
       正在載入文章內容 🕊️<span class="loading-dots"></span>
     </div>
@@ -228,7 +204,7 @@ const categoryColor = computed(() => {
         <h1
           v-if="article.subtitle"
           class="sub-title"
-          v-html="formatTextWithFootnote(article.subtitle)"
+          v-html="'──' + formatTextWithFootnote(article.subtitle)"
         ></h1>
       </div>
 
@@ -283,20 +259,11 @@ const categoryColor = computed(() => {
         </div>
       </div>
     </article>
-  </div>
+  </MainLayout>
 </template>
 
 <style scoped>
-/* 1. 頁面大容器 (半透明白底) */
-.article-page {
-  max-width: 100%;
-  margin: 50px auto;
-  padding: 50px 60px;
-  background-color: rgba(255, 255, 255, 0.7);
-  border-radius: 10px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-  min-height: 600px;
-}
+/* ⭐ 3. 已刪除 .article-page 的 CSS 設定，因為移到 MainLayout 了 */
 
 /* 2. 標題與標籤區 */
 .title-header {
@@ -486,7 +453,6 @@ const categoryColor = computed(() => {
   color: #666;
 }
 
-/* 隱藏 marked 產生的標題與分隔線（如果有） */
 :deep(.footnotes h2),
 :deep(.footnotes hr) {
   display: none;
@@ -494,20 +460,19 @@ const categoryColor = computed(() => {
 
 :deep(.footnotes ol) {
   padding-left: 0;
-  margin-left: -1rem; /* 修正偏移 */
+  margin-left: -1rem;
   list-style: none;
   counter-reset: footnote-counter;
 }
 
 :deep(.footnotes li) {
-  /* 【調整】將對齊方式改為 flex，讓文字和數字更容易垂直對齊 */
-  display: flex; /* 新增此行 */
-  align-items: baseline; /* 調整此行：讓文字的基線對齊 */
+  display: flex;
+  align-items: baseline;
   position: relative;
-  margin-bottom: 0px; /* 增加一點點間距 */
-  padding-left: 0; /* 移除 padding-left，因為 flex 結構不再需要 */
+  margin-bottom: 0px;
+  padding-left: 0;
   counter-increment: footnote-counter;
-  line-height: 1.6; /* 增加行高讓多行文字易讀 */
+  line-height: 1.6;
 }
 
 :deep(.footnotes li::before) {
@@ -529,35 +494,32 @@ const categoryColor = computed(() => {
   text-decoration: underline;
 }
 
-/* 針對 marked 產生的 p 標籤去除 margin，避免跑版 */
 :deep(.footnotes li p) {
   margin: 0;
   text-indent: 0 !important;
   flex-grow: 1;
-  padding-left: 10px; /* 數字和文字間距 */
+  padding-left: 10px;
 
   font-family: "Times New Roman", serif;
   color: #444;
   text-align: justify;
 }
-/* 針對 marked-footnote 產生的返回箭頭 ↩ */
+
 :deep(.footnotes .footnote-backref) {
   text-decoration: none;
   border: none;
   color: #007bff;
   margin-left: 5px;
-  font-family: sans-serif; /* 讓符號顯示正常 */
+  font-family: sans-serif;
 }
 
 :deep(.footnotes .footnote-backref:hover) {
   color: #0056b3;
 }
 
-/* RWD */
+/* RWD (內容調整保留，容器控制已移至 MainLayout) */
 @media (max-width: 768px) {
-  .article-page {
-    padding: 20px;
-  }
+  /* .article-page { padding: 20px; }  <-- 這行移除了 */
   .featured-box {
     position: relative;
     display: inline-block;

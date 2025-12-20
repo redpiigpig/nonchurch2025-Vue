@@ -1,7 +1,7 @@
 import { createRouter, createWebHistory } from "vue-router";
-import { supabase } from "../supabase"; // 【新增】引入 Supabase 以便檢查登入狀態
+import { supabase } from "../supabase";
 
-// 1. 引入頁面
+// 1. 引入前台頁面
 import HomeView from "../views/HomeView.vue";
 import MissionView from "../views/MissionView.vue";
 import ArticleListView from "../views/ArticleListView.vue";
@@ -9,77 +9,79 @@ import AuthorView from "../views/AuthorView.vue";
 import ArticleContent from "../views/ArticleContent.vue";
 import SearchView from "../views/SearchView.vue";
 import LoginView from "../views/LoginView.vue";
-import EditorView from "../views/EditorView.vue";
+import SubmissionView from "../views/SubmissionView.vue";
+
+// 2. 引入後台管理頁面
+
+const AdminLayout = () => import("../views/admin/AdminLayout.vue");
+const EditorView = () => import("../views/admin/EditorView.vue");
+
+// ⭐ 請把這三行註解解開 (Uncomment)
+const IssueManager = () => import("../views/admin/IssueManager.vue");
+const ArticleListManager = () => import("../views/admin/ArticleListManager.vue");
+const AuthorManager = () => import("../views/admin/AuthorManager.vue");
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
+    // ... (前台路由保持不變) ...
+    { path: "/", redirect: "/home" },
+    { path: "/home", name: "home", component: HomeView },
+    { path: "/home/issue/:issueNumber", name: "home-issue", component: HomeView, props: true },
+    { path: "/mission", name: "mission", component: MissionView },
+    { path: "/authors", name: "authors", component: AuthorView },
+    { path: "/articles", name: "article-list", component: ArticleListView },
+    { path: "/articles/:id", name: "article-detail", component: ArticleContent },
+    { path: "/preview", name: "article-preview", component: ArticleContent },
+    { path: "/submit", name: "submit", component: SubmissionView },
+    { path: "/submit/issue/:issueNumber", name: "submit-issue", component: SubmissionView },
+    { path: "/search", name: "search", component: SearchView },
+
+    // Admin root layout (可顯示後台首頁或作為子路由容器)
     {
-      path: "/home",
-      name: "home",
-      component: HomeView,
+      path: "/admin",
+      name: "admin",
+      component: AdminLayout,
+      meta: { requiresAuth: true },
     },
+    { path: "/login", name: "login", component: LoginView },
+
+    // 後台路由
     {
-      path: "/mission",
-      name: "mission",
-      component: MissionView,
-    },
-    {
-      path: "/authors",
-      name: "authors",
-      component: AuthorView,
-    },
-    {
-      path: "/articles",
-      name: "article-list",
-      component: ArticleListView,
-    },
-    {
-      path: "/articles/:id",
-      name: "article-detail",
-      component: ArticleContent,
-    },
-    {
-      path: "/preview",
-      name: "article-preview",
-      component: ArticleContent,
-    },
-    {
-      path: "/search",
-      name: "search",
-      component: SearchView,
-    },
-    {
-      path: "/login",
-      name: "login",
-      component: LoginView,
+      path: "/admin",
+      meta: { requiresAuth: true },
+      children: [
+        {
+          path: "",
+          component: AdminLayout,
+          children: [
+            { path: "", redirect: "issues" },
+            { path: "issues", name: "admin-issues", component: IssueManager },
+            { path: "articles", name: "admin-articles", component: ArticleListManager },
+            { path: "authors", name: "admin-authors", component: AuthorManager },
+
+            { path: "editor", name: "admin-editor-new", component: EditorView },
+            { path: "editor/:id", name: "admin-editor-edit", component: EditorView },
+          ],
+        },
+        // ... (鏡像路由保持不變) ...
+        { path: "home", component: HomeView },
+        { path: "home/issue/:issueNumber", component: HomeView, props: true },
+        { path: "mission", component: MissionView },
+        { path: "authors", component: AuthorView },
+        { path: "articles", component: ArticleListView },
+        { path: "articles/:id", component: ArticleContent },
+        { path: "submit", component: SubmissionView },
+        { path: "submit/issue/:issueNumber", component: SubmissionView },
+      ],
     },
 
-    // 🔥【重點修改】編輯相關路由，加上 meta: { requiresAuth: true }
-    // 這代表這些頁面「需要權限」才能進入
-    {
-      path: "/admin/editor",
-      name: "editor-new",
-      component: EditorView,
-      meta: { requiresAuth: true }, // 加上這個標記
-    },
-    {
-      path: "/admin/editor/:id",
-      name: "editor-edit",
-      component: EditorView,
-      meta: { requiresAuth: true }, // 加上這個標記
-    },
-
-    // 萬用路由
-    {
-      path: "/:pathMatch(.*)*",
-      redirect: "/home",
-    },
+    // ... (萬用路由與守衛保持不變) ...
+    { path: "/:pathMatch(.*)*", redirect: "/home" },
   ],
+  // ...
   scrollBehavior(to, from, savedPosition) {
-    if (savedPosition) {
-      return savedPosition;
-    }
+    if (savedPosition) return savedPosition;
     if (to.hash) {
       return new Promise((resolve) => {
         setTimeout(() => {
@@ -97,28 +99,20 @@ const router = createRouter({
   },
 });
 
-// 🔥【新增】全域路由守衛 (Global Navigation Guard)
-// 這是網站的「警衛室」，每次換頁都會經過這裡
 router.beforeEach(async (to, from, next) => {
-  // 1. 檢查這個頁面是否需要權限 (看有沒有 meta.requiresAuth)
-  if (to.meta.requiresAuth) {
-    // 2. 向 Supabase 檢查是否有登入 Session
+  const requiresAuth =
+    to.matched.some((record) => record.meta.requiresAuth) || to.path.startsWith("/admin");
+
+  if (requiresAuth) {
     const {
       data: { session },
     } = await supabase.auth.getSession();
-
-    // 3. 如果沒有 Session (沒登入)
     if (!session) {
-      // 踢回登入頁
-      next("/login");
-      // (選用) 可以跳個 alert 提示
-      // alert("請先登入編輯者帳號！");
+      next({ name: "login", query: { redirect: to.fullPath } });
     } else {
-      // 有登入，放行
       next();
     }
   } else {
-    // 不需要權限的頁面 (如首頁)，直接放行
     next();
   }
 });

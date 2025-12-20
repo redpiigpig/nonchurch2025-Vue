@@ -1,5 +1,4 @@
 <script setup>
-// 自動抓取年份
 const currentYear = new Date().getFullYear();
 </script>
 
@@ -10,6 +9,13 @@ const currentYear = new Date().getFullYear();
 </template>
 
 <style scoped>
+/* ⭐ 關鍵修正 */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
 .app-footer {
   background-color: #f1f1f1;
   text-align: center;
@@ -17,34 +23,26 @@ const currentYear = new Date().getFullYear();
   display: flex;
   justify-content: center;
   align-items: center;
-  margin-bottom: -10px;
-  width: 100%;
+  width: 100%; /* 加上 box-sizing 後，這行就安全了 */
+  /* margin-bottom: -10px;  <-- 建議移除這行，負邊距有時也會造成版面問題 */
 }
 
 .footer-note {
-  margin-top: 10px;
-  margin-bottom: 10px;
-  font-size: 1rem;
-  color: #444;
+  margin: 10px 0;
   font-size: 20px;
+  color: #444;
 }
 
-/* ==========================
-   RWD 
-========================== */
 @media (max-width: 768px) {
   .app-footer {
-    text-align: center;
-    padding: 10px;
     height: auto;
+    padding: 20px 10px; /* 增加上下 padding 比較好看，且不會撐爆寬度 */
     line-height: 1.4;
-    white-space: normal;
   }
 
   .footer-note {
-    padding-right: 30px;
-    margin-bottom: 0;
-    font-size: 16px;
+    padding: 0; /* 移除原本奇怪的 padding-right */
+    font-size: 14px; /* 手機版字體再小一點 */
   }
 }
 </style>
