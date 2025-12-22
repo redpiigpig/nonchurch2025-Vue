@@ -300,20 +300,19 @@ onMounted(() => {
 }
 
 /* ============================
-   Header 區塊 (標題置中 + 按鈕靠右)
+   Header 區塊
    ============================ */
 .header-row {
-  position: relative; /* 讓按鈕可以絕對定位 */
+  position: relative;
   display: flex;
-  justify-content: center; /* 讓中間的文字區塊置中 */
+  justify-content: center;
   align-items: center;
   margin-bottom: 30px;
-  min-height: 60px; /* 確保高度足夠 */
+  min-height: 60px;
 }
 
-/* 針對標題與描述的容器 */
 .header-row > div {
-  text-align: center; /* 讓 h2 和 p 文字置中 */
+  text-align: center;
 }
 
 .header-row h2 {
@@ -327,13 +326,11 @@ onMounted(() => {
   margin: 0;
 }
 
-/* 按鈕樣式 (絕對定位在右側) */
 .btn-add {
   position: absolute;
   right: 0;
   top: 50%;
-  transform: translateY(-50%); /* 垂直置中 */
-
+  transform: translateY(-50%);
   background-color: #2c3e50;
   color: white;
   border: none;
@@ -350,7 +347,7 @@ onMounted(() => {
 }
 
 /* ============================
-   表格與其他樣式 (保持原本設定)
+   表格樣式
    ============================ */
 .btn-edit {
   background-color: #3498db;
@@ -440,7 +437,9 @@ th {
   color: #721c24;
 }
 
-/* 彈窗樣式 */
+/* ============================
+   彈窗樣式 (關鍵修改)
+   ============================ */
 .modal-overlay {
   position: fixed;
   top: 0;
@@ -452,16 +451,20 @@ th {
   justify-content: center;
   align-items: center;
   z-index: 2000;
+  padding: 20px; /* 增加邊距 */
 }
+
 .modal {
   background: white;
   width: 90%;
   max-width: 700px;
+  max-height: 90vh; /* ⭐ 限制最大高度，避免超出螢幕 */
   border-radius: 10px;
   display: flex;
   flex-direction: column;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
 }
+
 .modal-header {
   padding: 20px;
   border-bottom: 1px solid #eee;
@@ -480,8 +483,11 @@ th {
   cursor: pointer;
   color: #999;
 }
+
 .modal-body {
   padding: 30px;
+  overflow-y: auto; /* ⭐ 內容過長時出現卷軸 */
+  flex: 1; /* 讓內容區自動佔滿剩餘空間 */
 }
 
 .form-row {
@@ -563,7 +569,7 @@ label {
   cursor: not-allowed;
 }
 
-/* RWD: 手機版改為垂直排列 */
+/* RWD */
 @media (max-width: 768px) {
   .header-row {
     flex-direction: column;
@@ -571,7 +577,7 @@ label {
     height: auto;
   }
   .btn-add {
-    position: static; /* 取消絕對定位 */
+    position: static;
     transform: none;
     margin-top: 10px;
   }

@@ -8,7 +8,7 @@ import { authors } from "../data/authors.js";
 
 const route = useRoute();
 const router = useRouter();
-const { isEditor } = useEditorMode(); // 1. 引入模式
+const { isEditor } = useEditorMode();
 
 const issuesList = ref([]);
 const currentIssueData = ref(null);
@@ -16,6 +16,9 @@ const currentIssueContent = ref([]);
 const articleSummaries = ref({});
 const hotKeywords = ref([]);
 const loading = ref(true);
+
+// ⭐ 新增：後台選單綁定變數
+const adminSelectedIssue = ref("");
 
 const searchQuery = ref("");
 const searchType = ref("title");
@@ -35,12 +38,10 @@ const extractCurrentKeywords = () => {
   hotKeywords.value = shuffled.slice(0, 5);
 };
 
-// --- 1. 核心邏輯：載入期數 ---
 const fetchIssues = async () => {
   loading.value = true;
   let query = supabase.from("issues").select("*").order("id", { ascending: false });
 
-  // ⭐ 邏輯修正：前台不顯示未發布期數
   if (!isEditor.value) {
     query = query.eq("is_published", true);
   }
@@ -55,7 +56,6 @@ const fetchIssues = async () => {
   loading.value = false;
 };
 
-// --- 2. 核心邏輯：載入當期文章 ---
 const loadTargetIssue = async () => {
   if (issuesList.value.length === 0) return;
 
@@ -67,15 +67,18 @@ const loadTargetIssue = async () => {
 
   currentIssueData.value = target;
 
+  // ⭐ 同步後台選單的值
   if (target) {
-    // 建立查詢
+    adminSelectedIssue.value = target.id;
+  }
+
+  if (target) {
     let artQuery = supabase
       .from("articles")
       .select("*")
       .eq("issue", target.id)
       .order("id", { ascending: true });
 
-    // ⭐ 關鍵修正：確保前台不會撈到該期裡面的草稿文章
     if (!isEditor.value) {
       artQuery = artQuery.eq("is_published", true);
     }
@@ -98,6 +101,19 @@ const loadTargetIssue = async () => {
       extractCurrentKeywords();
     }
   }
+};
+
+// ⭐ 新增：處理後台選單切換
+const handleAdminIssueChange = () => {
+  if (!adminSelectedIssue.value) return;
+
+  // 判斷目前是否在 /admin 路徑下
+  const isAdminPath = route.path.startsWith("/admin");
+  const targetPath = isAdminPath
+    ? `/admin/home/issue/${adminSelectedIssue.value}`
+    : `/home/issue/${adminSelectedIssue.value}`;
+
+  router.push(targetPath);
 };
 
 const fetchSummaries = async (contentList) => {
@@ -155,6 +171,17 @@ const currentIssue = computed(() => {
     authorOrder: currentIssueData.value.author_order,
     content: currentIssueContent.value,
   };
+});
+
+const formattedIntroCfp = computed(() => {
+  let text = currentIssue.value?.introCfp || "下一期將以精彩主題呈現，敬請期待。";
+  text = text.replace(/（(.*?)）/, (match) => {
+    return `<span style="color: #ff8000; font-weight: bold;">${match}</span>`;
+  });
+  text = text.replace(/「(.*?)」/, (match) => {
+    return `<span style="color: #007bff; font-weight: bold;">${match}</span>`;
+  });
+  return text;
 });
 
 const coverStory = computed(() => {
@@ -217,7 +244,6 @@ watch(
   () => loadTargetIssue()
 );
 
-// ⭐ 監聽模式：切換時重新抓取期數列表與內容
 watch(isEditor, () => {
   fetchIssues();
 });
@@ -230,8 +256,24 @@ onMounted(() => {
 
 <template>
   <MainLayout>
-    <div v-if="loading" style="text-align: center; padding: 50px">
-      <h2>載入中 . . . 🕊️</h2>
+    <h1 class="page-main-title">
+      <span class="emoji">🎉</span>
+      {{ route.params.issueNumber ? `第${route.params.issueNumber}期回顧` : "當期雜誌" }}
+      <span class="emoji">🎉</span>
+    </h1>
+    <div class="main-divider"></div>
+
+    <div v-if="isEditor" class="admin-toolbar">
+      <span class="toolbar-label">🔧 管理員導航：</span>
+      <select v-model="adminSelectedIssue" @change="handleAdminIssueChange" class="admin-select">
+        <option v-for="issue in issuesList" :key="issue.id" :value="issue.id">
+          Vol.{{ issue.id }} - {{ issue.title }} {{ !issue.is_published ? "(草稿)" : "" }}
+        </option>
+      </select>
+    </div>
+
+    <div v-if="loading" class="loading-state">
+      正在載入首頁 🕊️<span class="loading-dots"></span>
     </div>
 
     <div v-else-if="!currentIssue" class="not-found-state">
@@ -241,17 +283,6 @@ onMounted(() => {
     </div>
 
     <div v-else class="home-container">
-      <h1 class="page-main-title">
-        <span class="emoji">🎉</span>
-        {{ route.params.issueNumber ? `第 ${currentIssue?.number} 期回顧` : "當期雜誌" }}
-        <span class="emoji">🎉</span>
-        <span
-          v-if="isEditor && !currentIssueData.is_published"
-          style="font-size: 0.6em; color: red; vertical-align: middle"
-          >(草稿期數)</span
-        >
-      </h1>
-
       <section class="current-issue">
         <div class="left">
           <a :href="currentIssue?.pdfLink || '#'" target="_blank" title="下載本期 PDF 檔">
@@ -371,9 +402,7 @@ onMounted(() => {
       <section class="next-preview-submission">
         <div class="card-content">
           <h3>徵稿公告</h3>
-          <p class="next-issue-text">
-            {{ currentIssue?.introCfp || "下一期將以精彩主題呈現，敬請期待。" }}
-          </p>
+          <p class="next-issue-text" v-html="formattedIntroCfp"></p>
           <router-link to="/submit" class="btn">投稿資訊</router-link>
         </div>
 
@@ -482,9 +511,30 @@ onMounted(() => {
 </template>
 
 <style scoped>
-/* =========================================
-   1. 全域設定 & 基礎 Typography
-   ========================================= */
+/* ⭐ 新增：後台工具列樣式 */
+.admin-toolbar {
+  background-color: #fff3cd;
+  padding: 15px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  border: 1px solid #ffeeba;
+  justify-content: center;
+}
+.toolbar-label {
+  font-weight: bold;
+  color: #856404;
+  margin-right: 10px;
+}
+.admin-select {
+  padding: 5px 10px;
+  border-radius: 4px;
+  border: 1px solid #ddd;
+  font-size: 1rem;
+}
+
+/* ... (原本的樣式保持不變) ... */
 h1,
 h2,
 h3,
@@ -528,9 +578,7 @@ h2 {
   transform: translateY(-3px);
 }
 
-/* =========================================
-   2. 當期雜誌 (Current Issue)
-   ========================================= */
+/* ... (略過以節省篇幅，請保留您原檔其餘 CSS) ... */
 .current-issue {
   display: flex;
   gap: 2rem;
@@ -616,9 +664,7 @@ h2 {
   margin-right: 8px;
 }
 
-/* =========================================
-   3. 文章卡片與 Grid 系統
-   ========================================= */
+/* ... 文章卡片 ... */
 .diverse-lectures {
   background: #ffffff;
   border-radius: 8px;
@@ -716,7 +762,6 @@ h2 {
   text-indent: 2rem;
 }
 
-/* 標籤顏色樣式 */
 .article-type {
   position: absolute;
   top: -10px;
@@ -747,9 +792,6 @@ h2 {
   background-color: #6a5acd;
 }
 
-/* =========================================
-   4. 作者頭像區
-   ========================================= */
 .authors {
   padding: 3rem;
 }
@@ -780,7 +822,6 @@ h2 {
   font-size: 1.4rem;
   color: #333;
 }
-
 .author a {
   position: relative;
   text-decoration: none;
@@ -808,17 +849,12 @@ h2 {
   transform: translateX(-50%) translateY(-5px);
 }
 
-/* =========================================
-   5. 徵稿與訂閱區塊
-   ========================================= */
 .next-preview-submission {
   display: flex;
   justify-content: center;
   gap: 4rem;
   flex-wrap: wrap;
 }
-
-/* 統一卡片樣式 (徵稿 & 訂閱) */
 .card-content,
 .call-for-submission {
   flex: 1;
@@ -829,13 +865,11 @@ h2 {
   display: flex;
   flex-direction: column;
 }
-
 .card-content h3,
 .call-for-submission h3 {
   text-align: center;
   margin-bottom: 1.5rem;
 }
-
 .next-issue-text,
 .call-for-submission p {
   flex: 1;
@@ -843,7 +877,6 @@ h2 {
   color: #555;
   line-height: 1.8;
 }
-
 .next-issue-text {
   text-align: justify;
   text-indent: 2rem;
@@ -852,18 +885,6 @@ h2 {
   text-indent: 2rem;
 }
 
-.next-issue-date {
-  color: #ff8000;
-  font-weight: bold;
-}
-.next-topic {
-  color: #007bff;
-  font-weight: bold;
-}
-
-/* =========================================
-   6. 搜尋區塊
-   ========================================= */
 .search {
   text-align: center;
   border-radius: 8px;
@@ -895,13 +916,6 @@ h2 {
   text-decoration: underline;
 }
 
-/* 🔥 手機版關鍵字控制 */
-@media (max-width: 768px) {
-  .keyword-link:nth-of-type(n + 4) {
-    display: none;
-  }
-}
-
 .search-box {
   display: flex;
   justify-content: center;
@@ -929,9 +943,6 @@ h2 {
   cursor: pointer;
 }
 
-/* =========================================
-   7. 聯繫我們與 Social Icons
-   ========================================= */
 .contact {
   text-align: center;
   background: #fff;
@@ -939,14 +950,12 @@ h2 {
   padding: 2rem;
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
 }
-
 .social-links {
   display: flex;
   justify-content: center;
   gap: 25px;
   margin-top: 20px;
 }
-
 .social-btn {
   display: flex;
   align-items: center;
@@ -959,13 +968,11 @@ h2 {
   transition: all 0.3s ease;
   position: relative;
 }
-
 .social-btn svg {
   width: 28px;
   height: 28px;
   fill: currentColor;
 }
-
 .social-btn:hover {
   transform: translateY(-5px);
 }
@@ -996,7 +1003,6 @@ h2 {
   color: white;
   box-shadow: 0 5px 15px rgba(219, 68, 55, 0.4);
 }
-
 .social-btn::after {
   content: attr(data-tooltip);
   position: absolute;
@@ -1021,17 +1027,55 @@ h2 {
   visibility: visible;
   transform: translateX(-50%) translateY(-5px);
 }
+/* ===========================
+   新增：載入動畫樣式
+   =========================== */
+.loading-state {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 50vh; /* 讓它垂直置中，高度佔畫面一半 */
+  font-size: 2rem; /* 字體大小 */
+  color: #888;
+  font-family: serif; /* 如果想要跟內文一樣用襯線體 */
+  font-weight: bold;
+}
 
-/* =========================================
-   8. RWD 適配
-   ========================================= */
+.loading-dots::after {
+  content: "";
+  animation: dots-cycle 2s infinite steps(1);
+}
+
+@keyframes dots-cycle {
+  0% {
+    content: "";
+  }
+  15% {
+    content: ".";
+  }
+  30% {
+    content: "..";
+  }
+  45% {
+    content: "...";
+  }
+  60% {
+    content: "....";
+  }
+  75% {
+    content: ".....";
+  }
+  90% {
+    content: "......";
+  }
+}
+
 @media (max-width: 1024px) {
   .two-cols,
   .three-cols {
     grid-template-columns: repeat(2, 1fr);
   }
 }
-
 @media (max-width: 768px) {
   h2 {
     font-size: 2rem;

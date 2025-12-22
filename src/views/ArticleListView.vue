@@ -205,8 +205,8 @@ onMounted(() => {
         </div>
       </div>
 
-      <div v-if="loading" style="text-align: center; padding: 50px">
-        <h2>載入中 . . . 🕊️</h2>
+      <div v-if="loading" class="loading-state">
+        正在載入文章列表 🕊️<span class="loading-dots"></span>
       </div>
 
       <div v-else-if="filteredIssues.length === 0" class="no-data">
@@ -413,6 +413,49 @@ li {
   font-weight: bold;
   position: relative;
   color: #444;
+}
+
+/* ===========================
+   新增：載入動畫樣式
+   =========================== */
+.loading-state {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 50vh; /* 讓它垂直置中，高度佔畫面一半 */
+  font-size: 2rem; /* 字體大小 */
+  color: #888;
+  font-family: serif; /* 如果想要跟內文一樣用襯線體 */
+  font-weight: bold;
+}
+
+.loading-dots::after {
+  content: "";
+  animation: dots-cycle 2s infinite steps(1);
+}
+
+@keyframes dots-cycle {
+  0% {
+    content: "";
+  }
+  15% {
+    content: ".";
+  }
+  30% {
+    content: "..";
+  }
+  45% {
+    content: "...";
+  }
+  60% {
+    content: "....";
+  }
+  75% {
+    content: ".....";
+  }
+  90% {
+    content: "......";
+  }
 }
 @media (max-width: 768px) {
   .content-wrapper {

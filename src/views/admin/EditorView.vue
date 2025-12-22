@@ -2,10 +2,7 @@
 import { ref, computed, onMounted, nextTick } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { marked } from "marked";
-import markedFootnote from "marked-footnote";
 import { supabase } from "../../supabase";
-
-marked.use(markedFootnote());
 
 const route = useRoute();
 const router = useRouter();
@@ -13,6 +10,7 @@ const loading = ref(false);
 const isEditMode = ref(false);
 const showPreview = ref(true);
 const textareaRef = ref(null);
+const previewRef = ref(null);
 
 const form = ref({
   id: "",
@@ -55,24 +53,70 @@ const currentCategoryColor = computed(() => {
   return cat ? cat.color : "#ccc";
 });
 
+// ⭐ 預覽內容計算屬性
 const previewContent = computed(() => {
-  let content = form.value.content || "";
+  let fullText = form.value.content || "";
 
+  // 1. 處理註釋 [^1] -> 上標連結
+  fullText = fullText.replace(/\[\^(\d+)\]/g, (match, id) => {
+    return `<sup class="footnote-ref"><a href="#footnote-${id}" id="footnote-ref-${id}">${id}</a></sup>`;
+  });
+
+  // 2. 處理換行：將單換行轉為雙換行（這是為了讓一般文字能正確分段）
+  // 注意：這一步可能會影響複雜的 HTML 結構，但對於我們預設的單行組件通常沒問題
+  const formattedContent = fullText.replace(/([^\n])\n([^\n])/g, "$1\n\n$2");
+
+  // 3. 解析 Markdown
+  let parsedHtml = marked.parse(formattedContent, { gfm: true, breaks: true });
+
+  // 4. 手動附加註釋列表
   if (form.value.footnotes && form.value.footnotes.length > 0) {
-    content += "\n\n<div class='footnotes'><ol>";
-    form.value.footnotes.forEach((note) => {
-      content += `<li>${note.text}</li>`;
-    });
-    content += "</ol></div>";
+    const listItems = form.value.footnotes
+      .map((note) => {
+        return `<li id="footnote-${note.id}">
+          <p>
+            ${note.text}
+            <a href="#footnote-ref-${note.id}" class="footnote-backref">↩</a>
+          </p>
+        </li>`;
+      })
+      .join("");
+
+    parsedHtml += `
+      <div class="footnotes">
+        <hr />
+        <ol>${listItems}</ol>
+      </div>
+    `;
   }
 
-  const formattedContent = content.replace(/([^\n])\n([^\n])/g, "$1\n\n$2");
-  return marked.parse(formattedContent, { gfm: true, breaks: true });
+  return parsedHtml;
 });
+
+// --- 同步滾動邏輯 ---
+const activeScrollRegion = ref(null);
+const setActiveScroll = (region) => {
+  activeScrollRegion.value = region;
+};
+const handleSyncScroll = (sourceType) => {
+  if (activeScrollRegion.value !== sourceType) return;
+  const editor = textareaRef.value;
+  const preview = previewRef.value;
+  if (!editor || !preview) return;
+  let source, target;
+  if (sourceType === "editor") {
+    source = editor;
+    target = preview;
+  } else {
+    source = preview;
+    target = editor;
+  }
+  const percentage = source.scrollTop / (source.scrollHeight - source.clientHeight);
+  target.scrollTop = percentage * (target.scrollHeight - target.clientHeight);
+};
 
 onMounted(async () => {
   document.title = "編輯者頁面 - 無境界者雜誌";
-
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -81,7 +125,6 @@ onMounted(async () => {
     router.push("/login");
     return;
   }
-
   if (route.params.id) {
     isEditMode.value = true;
     loadArticle(route.params.id);
@@ -100,12 +143,9 @@ const loadArticle = async (id) => {
     alert("讀取失敗");
   } else {
     form.value = { ...data };
-
     if (!form.value.section) form.value.section = "";
-
     if (data.prev_article) form.value.prev_id = data.prev_article.id;
     if (data.next_article) form.value.next_id = data.next_article.id;
-
     if (!form.value.footnotes) form.value.footnotes = [];
     if (!form.value.summary) form.value.summary = "";
     if (data.seo) seoJson.value = JSON.stringify(data.seo, null, 2);
@@ -138,12 +178,10 @@ const handlePreview = () => {
 
 const saveArticle = async () => {
   if (!form.value.id || !form.value.title) return alert("ID 和標題必填！");
-
   loading.value = true;
   try {
     const prevObj = await resolveNeighbor(form.value.prev_id);
     const nextObj = await resolveNeighbor(form.value.next_id);
-
     const payload = {
       ...form.value,
       prev_article: prevObj,
@@ -151,13 +189,10 @@ const saveArticle = async () => {
       seo: JSON.parse(seoJson.value),
       updated_at: new Date(),
     };
-
     delete payload.prev_id;
     delete payload.next_id;
-
     const { error } = await supabase.from("articles").upsert(payload);
     if (error) throw error;
-
     alert("儲存成功！🎉");
     router.push(`/articles/${form.value.id}`);
   } catch (err) {
@@ -167,7 +202,6 @@ const saveArticle = async () => {
   }
 };
 
-// 註釋邏輯
 const addFootnote = () => {
   const nextId = form.value.footnotes.length + 1;
   form.value.footnotes.push({ id: nextId, text: "" });
@@ -178,32 +212,19 @@ const removeFootnote = (index) => {
   reindexFootnotes();
 };
 
-// ⭐ 新增：直接修改數字排序邏輯
 const updateFootnoteOrder = (currentIndex, event) => {
   const newId = parseInt(event.target.value);
-
-  // 防呆：如果輸入無效數字，重置回原本數字
   if (isNaN(newId) || newId < 1) {
     event.target.value = currentIndex + 1;
     return;
   }
-
-  // 1. 計算新的 Index (數字 - 1)
   let newIndex = newId - 1;
-
-  // 2. 限制範圍 (不能超過陣列長度)
   if (newIndex >= form.value.footnotes.length) {
     newIndex = form.value.footnotes.length - 1;
   }
-
-  // 如果位置沒變，不動作
   if (newIndex === currentIndex) return;
-
-  // 3. 移動陣列元素
-  const item = form.value.footnotes.splice(currentIndex, 1)[0]; // 取出
-  form.value.footnotes.splice(newIndex, 0, item); // 插入新位置
-
-  // 4. 全部重新編號 1, 2, 3...
+  const item = form.value.footnotes.splice(currentIndex, 1)[0];
+  form.value.footnotes.splice(newIndex, 0, item);
   reindexFootnotes();
 };
 
@@ -222,23 +243,18 @@ const insertOrWrap = async (
 ) => {
   const textarea = textareaRef.value;
   if (!textarea) return;
-
   const start = textarea.selectionStart;
   const end = textarea.selectionEnd;
   const originalText = form.value.content;
   const selectedText = originalText.substring(start, end);
-
   const checkPrefix = togglePrefix || prefix;
   const checkSuffix = toggleSuffix || suffix;
-
   let newText = "";
   let newSelectionStart = 0;
   let newSelectionEnd = 0;
-
   const isWrapped =
     originalText.substring(start - checkPrefix.length, start) === checkPrefix &&
     originalText.substring(end, end + checkSuffix.length) === checkSuffix;
-
   if (isWrapped) {
     newText =
       originalText.substring(0, start - checkPrefix.length) +
@@ -265,7 +281,6 @@ const insertOrWrap = async (
     newSelectionStart = start + prefix.length;
     newSelectionEnd = newSelectionStart + defaultText.length;
   }
-
   form.value.content = newText;
   await nextTick();
   textarea.focus({ preventScroll: true });
@@ -288,7 +303,7 @@ const insertBlock = async (template) => {
 const tools = [
   { label: "H2 副標", action: () => insertOrWrap("## ", "\n", "輸入標題") },
   { label: "H3 小標", action: () => insertOrWrap("### ", "\n", "輸入標題") },
-  { label: "粗體", action: () => insertOrWrap("**", "**", "粗體文字") },
+  { label: "粗體", action: () => insertOrWrap(" **", "** ", "粗體文字") },
   { label: "斜體", action: () => insertOrWrap("<i>", "</i>", "斜體文字") },
   { label: "標楷體", action: () => insertOrWrap("*", "*", "標楷體文字") },
   { label: "註釋號碼", action: () => insertOrWrap("[^", "]", "1") },
@@ -326,114 +341,91 @@ const components = [
     label: "📚 書籍簡介",
     action: () =>
       insertBlock(
-        `<div class="book-box">\n  <div class="book-info">\n    <strong>書籍資訊</strong><br />\n    【書名】...<br />\n    【作者】...<br />\n    【出版】...\n  </div>\n  <div class="book-image">\n    <img src="圖片網址" alt="封面" />\n  </div>\n</div>\n`
+        `\n\n<div class="book-box"><div class="book-info"><strong>書籍資訊</strong><br />【書名】...<br />【作者】...<br />【出版】...</div><div class="book-image"><img src="圖片網址" alt="封面" /></div></div>\n\n`
       ),
   },
   {
     label: "❝ 書本引言",
     action: () =>
       insertBlock(
-        `<div class="book-quote">\n引用的內文...\n<div class="book-quote-rel"> ──《書名》，頁數 </div>\n</div>\n`
+        `\n\n<div class="book-quote">引用的內文...<div class="book-quote-rel"> ──《書名》，頁數 </div></div>\n\n`
       ),
   },
   {
     label: "🖼️ 主題圖片",
     action: () =>
-      insertBlock(`<div class="theme-image">\n  <img src="圖片網址" alt="主題圖片">\n</div>\n`),
+      insertBlock(`\n\n<div class="theme-image"><img src="圖片網址" alt="主題圖片"></div>\n\n`),
   },
   {
     label: "🖼️ 圖片(左)",
     action: () =>
       insertBlock(
-        `<figure class="img-left px-300">\n  <img src="圖片網址" alt="描述">\n  <figcaption>圖片說明</figcaption>\n</figure>\n`
+        `\n\n<figure class="img-left px-300"><img src="圖片網址" alt="描述"><figcaption>圖片說明</figcaption></figure>\n\n`
       ),
   },
   {
     label: "🖼️ 圖片(中)",
     action: () =>
       insertBlock(
-        `<figure class="img-bottom px-600">\n  <img src="圖片網址" alt="描述">\n  <figcaption>圖片說明文字</figcaption>\n</figure>\n`
+        `\n\n<figure class="img-bottom px-600"><img src="圖片網址" alt="描述"><figcaption>圖片說明文字</figcaption></figure>\n\n`
       ),
   },
   {
     label: "🖼️ 圖片(右)",
     action: () =>
       insertBlock(
-        `<figure class="img-right px-300">\n  <img src="圖片網址" alt="描述">\n  <figcaption>圖片說明</figcaption>\n</figure>\n`
+        `\n\n<figure class="img-right px-300"><img src="圖片網址" alt="描述"><figcaption>圖片說明</figcaption></figure>\n\n`
       ),
   },
   {
     label: "👤 作者簡介",
     action: () =>
       insertBlock(
-        `<div class="author-profile">\n  <img src="圖片網址" alt="作者頭像">\n  <div>\n    <h3>作者名稱</h3>\n    <p>作者簡介內容...</p>\n  </div>\n</div>\n`
+        `\n\n<div class="author-profile"><img src="圖片網址" alt="作者頭像"><div><h3>作者名稱</h3><p>作者簡介內容...</p></div></div>\n\n`
       ),
   },
   {
     label: "ℹ️ 資訊卡片",
     action: () =>
       insertBlock(
-        `<div class="info-card">\n  <div class="info-card-inner">\n    <img src="Logo網址" alt="Logo">\n    <div>\n      <h3>標題</h3>\n      <div class="info-card-links">\n        <a href="#" target="_blank">連結1</a>\n      </div>\n    </div>\n  </div>\n</div>\n`
+        `\n\n<div class="info-card"><div class="info-card-inner"><img src="Logo網址" alt="Logo"><div><h3>標題</h3><div class="info-card-links"><a href="#" target="_blank">連結1</a></div></div></div></div>\n\n`
       ),
   },
   {
     label: "📜 參考資料",
     action: () => {
-      let numRows = prompt("請輸入參考資料的列數（預設為 2）：", "2");
-      numRows = parseInt(numRows);
-      if (isNaN(numRows) || numRows <= 0) numRows = 2;
+      let numRows = prompt("請輸入列數", "2");
+      numRows = parseInt(numRows) || 2;
       let listItems = "";
       for (let i = 1; i <= numRows; i++) {
-        listItems += `
-    <div style="text-indent: -1.5rem; padding-left: 1.5rem; margin-bottom: 1rem; line-height: 1.8;">
-      •&nbsp;&nbsp;資料來源${i}...
-    </div>`;
+        listItems += `<div style="text-indent: -1.5rem; padding-left: 1.5rem; margin-bottom: 1rem; line-height: 1.8;">•&nbsp;&nbsp;資料來源${i}...</div>`;
       }
-      const template = `
-<div class="reference-box">
-  <strong>參考資料</strong>
-  <div style="margin-top: 1rem; margin-bottom: 1rem;">${listItems}
-  </div>
-</div>
-`;
+      const template = `\n\n<div class="reference-box"><strong>參考資料</strong><div style="margin-top: 1rem; margin-bottom: 1rem;">${listItems}</div></div>\n\n`;
       insertBlock(template);
     },
   },
   {
     label: "📊 表格",
     action: () => {
-      let sizeInput = prompt("請輸入表格尺寸 (欄x列)，例如：3x4。預設為 2x5：", "2x5");
-      let cols = 2;
-      let rows = 5;
+      let sizeInput = prompt("表格尺寸 (欄x列)", "2x5");
+      let cols = 2,
+        rows = 5;
       if (sizeInput) {
-        const parts = sizeInput.toLowerCase().split(/[x\*]/);
-        if (parts.length === 2) {
-          const c = parseInt(parts[0].trim());
-          const r = parseInt(parts[1].trim());
-          if (!isNaN(c) && c > 0) cols = c;
-          if (!isNaN(r) && r > 0) rows = r;
-        }
+        const p = sizeInput.toLowerCase().split(/[x\*]/);
+        cols = parseInt(p[0]) || 2;
+        rows = parseInt(p[1]) || 5;
       }
-      let tableHeader = "  <thead>\n    <tr>";
-      for (let i = 1; i <= cols; i++) {
-        tableHeader += `\n      <th>標題${i}</th>`;
-      }
-      tableHeader += "\n    </tr>\n  </thead>";
-      let tableBody = "  <tbody>";
+      let h = "<thead><tr>";
+      for (let i = 1; i <= cols; i++) h += `<th>標題${i}</th>`;
+      h += "</tr></thead>";
+      let b = "<tbody>";
       for (let r = 1; r <= rows; r++) {
-        tableBody += "\n    <tr>";
-        for (let c = 1; c <= cols; c++) {
-          tableBody += `\n      <td>內容 ${r}-${c}</td>`;
-        }
-        tableBody += "\n    </tr>";
+        b += "<tr>";
+        for (let c = 1; c <= cols; c++) b += `<td>內容 ${r}-${c}</td>`;
+        b += "</tr>";
       }
-      tableBody += "\n  </tbody>";
-      const template = `
-<table class="data-table">
-${tableHeader}
-${tableBody}
-</table>\n`;
-      insertBlock(template);
+      b += "</tbody>";
+      insertBlock(`\n\n<table class="data-table">\n${h}\n${b}\n</table>\n\n`);
     },
   },
 ];
@@ -456,24 +448,20 @@ ${tableBody}
 
     <div class="editor-content">
       <section class="editor-card collapsed-group">
-        <div class="card-header-wrapper">
-          <div class="card-title">基本資料設定</div>
-        </div>
-
+        <div class="card-header-wrapper"><div class="card-title">基本資料設定</div></div>
         <div class="card-body">
           <div class="form-grid">
             <div class="form-group full-width">
               <div style="display: flex; gap: 15px">
                 <div style="flex: 2">
-                  <label>文章 ID</label>
-                  <input
+                  <label>文章 ID</label
+                  ><input
                     v-model="form.id"
                     :disabled="isEditMode"
                     class="input-field"
                     placeholder="例如: 5-14文章標題"
                   />
                 </div>
-
                 <div style="flex: 1; position: relative">
                   <label>文章分類</label>
                   <div class="select-wrapper">
@@ -486,10 +474,9 @@ ${tableBody}
                     </select>
                   </div>
                 </div>
-
                 <div style="flex: 1">
-                  <label>文章區塊 (Section)</label>
-                  <select v-model="form.section" class="input-field">
+                  <label>文章區塊 (Section)</label
+                  ><select v-model="form.section" class="input-field">
                     <option value="">（無）</option>
                     <option v-for="sec in sections" :key="sec" :value="sec" v-show="sec !== ''">
                       {{ sec }}
@@ -498,71 +485,60 @@ ${tableBody}
                 </div>
               </div>
             </div>
-
             <div class="form-group full-width">
-              <label>主標題</label>
-              <input v-model="form.title" class="input-field title-input" />
+              <label>主標題</label><input v-model="form.title" class="input-field title-input" />
             </div>
             <div class="form-group full-width">
-              <label>副標題</label>
-              <input v-model="form.subtitle" class="input-field" />
+              <label>副標題</label><input v-model="form.subtitle" class="input-field" />
             </div>
-
             <div class="form-group full-width">
               <div style="display: flex; gap: 20px; align-items: flex-end">
                 <div style="flex: 0 0 100px">
-                  <label>期數</label>
-                  <input v-model="form.issue" type="number" class="input-field" />
+                  <label>期數</label
+                  ><input v-model="form.issue" type="number" class="input-field" />
                 </div>
                 <div style="flex: 1">
-                  <label>期數標題</label>
-                  <input v-model="form.issue_title" class="input-field" />
+                  <label>期數標題</label><input v-model="form.issue_title" class="input-field" />
                 </div>
               </div>
             </div>
-
             <div class="form-group full-width">
               <div style="display: flex; gap: 15px">
                 <div style="flex: 1">
-                  <label>作者</label>
-                  <input v-model="form.author" class="input-field" />
+                  <label>作者</label><input v-model="form.author" class="input-field" />
                 </div>
                 <div style="flex: 1">
-                  <label>職稱 (Title)</label>
-                  <input v-model="form.author_title" class="input-field" />
+                  <label>職稱 (Title)</label
+                  ><input v-model="form.author_title" class="input-field" />
                 </div>
                 <div style="flex: 1">
-                  <label>備註 (Remark)</label>
-                  <input v-model="form.remark" class="input-field" />
+                  <label>備註 (Remark)</label><input v-model="form.remark" class="input-field" />
                 </div>
               </div>
             </div>
-
             <div class="form-group full-width">
-              <label>關鍵字</label>
-              <input v-model="form.keyword" class="input-field" placeholder="**🌿 關鍵字**：..." />
+              <label>關鍵字</label
+              ><input v-model="form.keyword" class="input-field" placeholder="**🌿 關鍵字**：..." />
             </div>
-
             <div class="form-group full-width">
-              <label>文章簡介 (Summary)</label>
-              <textarea
+              <label>文章簡介 (Summary)</label
+              ><textarea
                 v-model="form.summary"
                 class="summary-textarea"
                 placeholder="請輸入吸引人的文章摘要..."
               ></textarea>
             </div>
-
             <div class="form-group">
-              <label>上一篇文章 ID (Prev)</label>
-              <input
+              <label>上一篇文章 ID (Prev)</label
+              ><input
                 v-model="form.prev_id"
                 class="input-field"
                 placeholder="輸入 ID 例如: 5-12權力..."
               />
             </div>
             <div class="form-group">
-              <label>下一篇文章 ID (Next)</label>
-              <input
+              <label>下一篇文章 ID (Next)</label
+              ><input
                 v-model="form.next_id"
                 class="input-field"
                 placeholder="輸入 ID 例如: 5-14未來..."
@@ -609,9 +585,19 @@ ${tableBody}
               v-model="form.content"
               class="markdown-textarea main-editor"
               placeholder="預設文章內容會自動縮排兩字..."
+              @mouseenter="setActiveScroll('editor')"
+              @touchstart="setActiveScroll('editor')"
+              @scroll="handleSyncScroll('editor')"
             ></textarea>
           </div>
-          <div v-if="showPreview" class="preview-pane">
+          <div
+            v-if="showPreview"
+            class="preview-pane"
+            ref="previewRef"
+            @mouseenter="setActiveScroll('preview')"
+            @touchstart="setActiveScroll('preview')"
+            @scroll="handleSyncScroll('preview')"
+          >
             <div class="preview-header">即時預覽</div>
             <div class="markdown-body" v-html="previewContent"></div>
           </div>
@@ -621,8 +607,7 @@ ${tableBody}
       <section class="editor-card">
         <div class="card-header-wrapper">
           <div class="card-title">
-            註釋管理
-            <button @click="addFootnote" class="btn-mini-add">+ 新增</button>
+            註釋管理 <button @click="addFootnote" class="btn-mini-add">+ 新增</button>
           </div>
         </div>
         <div class="card-body">
@@ -634,7 +619,6 @@ ${tableBody}
                 :value="note.id"
                 @change="(e) => updateFootnoteOrder(index, e)"
               />
-
               <input v-model="note.text" class="input-field note-input" />
               <button @click="removeFootnote(index)" class="btn-icon-del" title="刪除">✕</button>
             </div>
@@ -643,27 +627,21 @@ ${tableBody}
       </section>
 
       <section class="editor-card collapsed-group">
-        <div class="card-header-wrapper">
-          <div class="card-title">SEO 設定</div>
-        </div>
-        <div class="card-body">
-          <textarea v-model="seoJson" class="json-textarea"></textarea>
-        </div>
+        <div class="card-header-wrapper"><div class="card-title">SEO 設定</div></div>
+        <div class="card-body"><textarea v-model="seoJson" class="json-textarea"></textarea></div>
       </section>
     </div>
   </div>
 </template>
 
 <style scoped>
-@import "@/assets/article.css";
-
+/* 編輯器本身的 UI 樣式 */
 input,
 textarea,
 select {
   box-sizing: border-box;
   max-width: 100%;
 }
-
 .editor-layout {
   background-color: #f4f6f8;
   min-height: 100vh;
@@ -671,7 +649,6 @@ select {
   width: 100%;
   overflow-x: hidden;
 }
-
 .editor-header {
   position: sticky;
   top: 0px;
@@ -685,31 +662,26 @@ select {
   align-items: center;
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
 }
-
 @media (max-width: 768px) {
   .editor-header {
     top: 0;
     padding: 10px 15px;
   }
 }
-
 .header-left h2 {
   font-size: 1.2rem;
   margin: 0;
   color: #333;
   margin-left: 15px;
 }
-
 .editor-content {
-  max-width: 1400px;
+  max-width: 1200px;
   margin: 20px auto;
   display: flex;
   flex-direction: column;
   gap: 20px;
   box-sizing: border-box;
 }
-
-/* ⭐ 結構修正：卡片與標題 */
 .editor-card {
   background: white;
   border-radius: 8px;
@@ -717,21 +689,16 @@ select {
   border: 1px solid #eaeaea;
   max-width: 100%;
   box-sizing: border-box;
-  overflow: hidden; /* 防止內容溢出 */
+  overflow: hidden;
 }
-
-/* 標題區塊 Wrapper (確保標題獨佔一行) */
 .card-header-wrapper {
   border-bottom: 1px solid #eee;
   padding: 15px 20px;
   background-color: #fafafa;
 }
-
-/* 內容區塊 Wrapper */
 .card-body {
   padding: 20px;
 }
-
 .card-title {
   font-size: 1.1rem;
   font-weight: bold;
@@ -743,7 +710,6 @@ select {
   align-items: center;
   margin: 0;
 }
-
 .card-title-row {
   display: flex;
   justify-content: space-between;
@@ -756,7 +722,6 @@ select {
   font-weight: bold;
   color: #2c3e50;
 }
-
 .btn-preview-inline {
   background-color: #f0f7ff;
   color: #007bff;
@@ -770,8 +735,6 @@ select {
 .btn-preview-inline:hover {
   background-color: #d6eaff;
 }
-
-/* 編輯器分割視窗 */
 .editor-split-view {
   display: flex;
   height: 700px;
@@ -779,18 +742,15 @@ select {
   border-top: none;
   overflow: hidden;
 }
-
 .editor-pane {
   flex: 1;
   display: flex;
   flex-direction: column;
   border-right: none;
 }
-
 .preview-active .editor-pane {
   border-right: 2px solid #ccc;
 }
-
 .main-editor {
   width: 100%;
   height: 100%;
@@ -803,7 +763,6 @@ select {
   line-height: 1.6;
   background-color: #fff;
 }
-
 .preview-pane {
   flex: 1;
   background-color: #fff;
@@ -811,7 +770,6 @@ select {
   padding: 30px;
   position: relative;
 }
-
 .preview-header {
   position: absolute;
   top: 0;
@@ -822,7 +780,6 @@ select {
   color: #666;
   border-bottom-left-radius: 5px;
 }
-
 .toolbar {
   background: #f8f9fa;
   border-bottom: 1px solid #ddd;
@@ -870,7 +827,6 @@ select {
 .comp-btn:hover {
   background: #d6eaff;
 }
-
 .form-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -880,7 +836,6 @@ select {
 .full-width {
   grid-column: 1 / -1;
 }
-
 .form-group label {
   display: block;
   font-size: 0.9rem;
@@ -898,7 +853,6 @@ select {
   font-size: 1.1rem;
   font-weight: bold;
 }
-
 .select-wrapper {
   position: relative;
 }
@@ -913,7 +867,6 @@ select {
   height: 15px;
   border-radius: 50%;
 }
-
 .json-textarea {
   width: 100%;
   min-height: 300px;
@@ -925,7 +878,6 @@ select {
   font-size: 0.9rem;
   border: 1px solid #1e293b;
 }
-
 .summary-textarea {
   width: 100%;
   min-height: 100px;
@@ -942,7 +894,6 @@ select {
   border-color: #007bff;
   background-color: white;
 }
-
 .btn-save {
   background: #28a745;
   color: white;
@@ -958,7 +909,6 @@ select {
 .btn-save:disabled {
   background: #ccc;
 }
-
 .btn-preview-page {
   background: #17a2b8;
   color: white;
@@ -972,7 +922,6 @@ select {
 .btn-preview-page:hover {
   background: #138496;
 }
-
 .btn-back {
   border: 1px solid #ccc;
   background: transparent;
@@ -984,8 +933,6 @@ select {
   background: #f0f0f0;
   color: #333;
 }
-
-/* 註釋列表 */
 .footnotes-list {
   display: flex;
   flex-direction: column;
@@ -996,7 +943,6 @@ select {
   align-items: center;
   gap: 10px;
 }
-/* 註釋編號輸入框 */
 .note-number-input {
   width: 50px;
   text-align: center;
@@ -1010,7 +956,6 @@ select {
   background-color: white;
   border-color: #007bff;
 }
-
 .btn-mini-add {
   background: #e7f1ff;
   border: none;
@@ -1032,7 +977,6 @@ select {
 .btn-icon-del:hover {
   color: red;
 }
-
 @media (max-width: 1024px) {
   .editor-split-view {
     flex-direction: column;
@@ -1048,6 +992,233 @@ select {
   }
   .form-grid {
     grid-template-columns: 1fr;
+  }
+}
+</style>
+
+<style>
+/* 基礎排版 */
+.preview-pane .markdown-body {
+  font-family: "Times New Roman", serif;
+  font-size: 1.2rem;
+  line-height: 1.8;
+  color: #333;
+  text-align: justify;
+}
+.preview-pane .markdown-body p {
+  margin-bottom: 1rem;
+  text-indent: 2em;
+}
+.preview-pane .markdown-body .no-indent {
+  text-indent: 0 !important;
+}
+.preview-pane .markdown-body strong {
+  font-weight: bold;
+}
+.preview-pane .markdown-body a {
+  color: #007bff;
+  text-decoration: none;
+}
+.preview-pane .markdown-body a:hover {
+  color: #0056b3;
+  text-decoration: underline;
+}
+.preview-pane .markdown-body h2 {
+  font-size: 1.8rem;
+  margin-top: 2.5rem;
+  border-bottom: none;
+  font-weight: bold;
+  color: #333;
+}
+.preview-pane .markdown-body h3 {
+  font-size: 1.4rem;
+  margin-top: 2rem;
+  font-weight: bold;
+  color: #333;
+}
+.preview-pane .markdown-body img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 30px auto;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+}
+
+/* --- 組件樣式 (書籍、圖片、引用) --- */
+
+/* 書籍簡介 (Book Box) */
+.preview-pane .book-box {
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+  margin: 30px 2em;
+  padding: 20px 30px;
+  background-color: #f9f9f9;
+  border-left: 5px solid #378b13;
+  border-radius: 5px;
+}
+.preview-pane .book-info {
+  flex: 2;
+  font-family: "Times New Roman", serif;
+}
+.preview-pane .book-image {
+  flex: 1;
+  text-align: center;
+}
+.preview-pane .book-image img {
+  margin: 0;
+  box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.2);
+  width: 100%;
+}
+
+/* 書本引言 */
+.preview-pane .book-quote {
+  background-color: rgba(0, 0, 0, 0.03);
+  border-left: 5px solid #8b4513;
+  margin: 30px 2em 60px 2em;
+  padding: 20px 30px;
+  font-family: "Times New Roman", serif;
+  font-size: 1.2rem;
+  font-weight: bold;
+  color: #444;
+}
+.preview-pane .book-quote-rel {
+  display: block;
+  text-align: right;
+  font-size: 1.2rem;
+  margin-top: 1.5rem;
+  color: #444;
+  font-weight: bold;
+  font-style: normal;
+}
+
+/* 資訊卡片 (Info Card) */
+.preview-pane .info-card {
+  background-color: #f5faff;
+  border: 1px solid #ddd;
+  border-radius: 12px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+  padding: 20px;
+  float: right;
+  width: 320px;
+  margin: 10px 0 20px 30px;
+}
+.preview-pane .info-card-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 15px;
+  text-align: center;
+}
+.preview-pane .info-card img {
+  width: 200px;
+  height: 200px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 3px solid #eee;
+}
+.preview-pane .info-card h3 {
+  font-size: 1.5rem;
+  margin: 0;
+  color: #333;
+}
+.preview-pane .info-card-links a {
+  display: inline-block;
+  padding: 5px 12px;
+  background: #f5f5f5;
+  color: #555;
+  border-radius: 20px;
+  font-size: 0.9rem;
+}
+
+/* 參考資料 */
+.preview-pane .reference-box {
+  background-color: #f9f9f9;
+  border-left: 5px solid #378b13;
+  border-radius: 5px;
+  margin: 30px 2em;
+  padding: 20px 30px;
+  font-family: "Times New Roman", serif;
+}
+.preview-pane .reference-box strong {
+  display: block;
+  font-size: 1.25rem;
+  margin-bottom: 15px;
+  color: #000;
+  font-weight: bold;
+}
+
+/* 註釋系統 (Footnotes) */
+.preview-pane .footnotes {
+  margin-top: 60px;
+  padding-top: 20px;
+  border-top: 2px solid #444;
+  font-size: 1rem;
+  color: #666;
+}
+.preview-pane .footnotes ol {
+  padding-left: 0;
+  margin-left: -1rem;
+  list-style: none;
+  counter-reset: footnote-counter;
+}
+.preview-pane .footnotes li {
+  display: flex;
+  align-items: baseline;
+  counter-increment: footnote-counter;
+  margin-bottom: 5px;
+}
+.preview-pane .footnotes li::before {
+  content: counter(footnote-counter);
+  display: inline-block;
+  width: 2em;
+  flex-shrink: 0;
+  color: #007bff;
+  text-align: right;
+  margin-right: 10px;
+  cursor: pointer;
+}
+.preview-pane .footnotes li p {
+  margin: 0;
+  text-indent: 0 !important;
+  flex-grow: 1;
+  text-align: justify;
+}
+.preview-pane .footnotes .footnote-backref {
+  text-decoration: none;
+  border: none;
+  color: #007bff;
+  margin-left: 5px;
+  font-family: sans-serif;
+}
+
+/* 藍色上標連結 */
+.preview-pane .footnote-ref a {
+  color: #007bff !important;
+  text-decoration: none;
+  font-weight: normal;
+}
+
+/* 分隔線 */
+.preview-pane .custom-divider {
+  width: 100%;
+  height: 2px;
+  background: #ccc;
+  margin: 40px auto;
+}
+
+/* RWD 修正 */
+@media (max-width: 768px) {
+  .preview-pane .book-box {
+    flex-direction: column;
+    text-align: left;
+    padding: 15px;
+    margin: 20px 0;
+  }
+  .preview-pane .info-card {
+    float: none;
+    width: 100%;
+    margin: 20px auto;
   }
 }
 </style>

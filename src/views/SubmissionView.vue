@@ -1,17 +1,21 @@
 <script setup>
 import { ref, computed, watch, onMounted } from "vue";
-import { useRoute } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import MainLayout from "../components/MainLayout.vue";
 import { supabase } from "../supabase";
-// ⭐ 補上這裡
 import { useEditorMode } from "../composables/useEditorMode";
 
 const route = useRoute();
+const router = useRouter();
 const loading = ref(true);
 const currentTheme = ref(null);
 const { isEditor } = useEditorMode();
 
-// 核心函式：根據網址決定要抓哪一期
+// ⭐ 新增：後台選單相關
+const allIssues = ref([]);
+const adminSelectedIssue = ref("");
+
+// 1. 抓取單期主題資料 (原本邏輯)
 const fetchThemeData = async () => {
   loading.value = true;
   currentTheme.value = null;
@@ -22,14 +26,13 @@ const fetchThemeData = async () => {
       .select("id, title, date, cfp_title, cfp_theme, cfp_deadline, cfp_image");
 
     if (route.params.issueNumber) {
-      // 指定期數
       query = query.eq("id", route.params.issueNumber);
+      // ⭐ 同步選單值
+      adminSelectedIssue.value = route.params.issueNumber;
     } else {
-      // 預設抓最新一期 (必須有 cfp_title)
       query = query.not("cfp_title", "is", null).order("id", { ascending: false }).limit(1);
     }
 
-    // ⭐ 關鍵邏輯：前台只能看到已發布的徵稿主題
     if (!isEditor.value) {
       query = query.eq("is_published", true);
     }
@@ -40,6 +43,10 @@ const fetchThemeData = async () => {
 
     if (data && data.length > 0) {
       currentTheme.value = data[0];
+      // 如果是預設最新一期，也同步選單
+      if (!route.params.issueNumber) {
+        adminSelectedIssue.value = data[0].id;
+      }
     }
   } catch (err) {
     console.error("Error fetching submission theme:", err.message);
@@ -48,9 +55,27 @@ const fetchThemeData = async () => {
   }
 };
 
+// ⭐ 2. 抓取所有期數列表 (供選單使用)
+const fetchAllIssues = async () => {
+  const { data } = await supabase
+    .from("issues")
+    .select("id, title, is_published")
+    .order("id", { ascending: false });
+  allIssues.value = data || [];
+};
+
+// ⭐ 3. 處理後台選單切換
+const handleAdminIssueChange = () => {
+  if (!adminSelectedIssue.value) return;
+  const isAdminPath = route.path.startsWith("/admin");
+  const targetPath = isAdminPath
+    ? `/admin/submit/issue/${adminSelectedIssue.value}`
+    : `/submit/issue/${adminSelectedIssue.value}`;
+  router.push(targetPath);
+};
+
 const themeParagraphs = computed(() => {
   if (!currentTheme.value || !currentTheme.value.cfp_theme) return [];
-  // 濾掉純空白行
   return currentTheme.value.cfp_theme.split("\n").filter((p) => p.trim() !== "");
 });
 
@@ -61,14 +86,15 @@ watch(
   }
 );
 
-// ⭐ 監聽模式：切換時重新抓取
 watch(isEditor, () => {
   fetchThemeData();
+  if (isEditor.value) fetchAllIssues(); // 切換到編輯模式時抓列表
 });
 
 onMounted(() => {
   document.title = "投稿資訊 - 無境界者雜誌";
   fetchThemeData();
+  if (isEditor.value) fetchAllIssues(); // 初始載入
 });
 </script>
 
@@ -77,20 +103,28 @@ onMounted(() => {
     <h1 class="page-main-title">
       <span class="emoji">📬</span>投稿資訊<span class="emoji">📬</span>
     </h1>
-
     <div class="main-divider"></div>
+    <div v-if="isEditor" class="admin-toolbar">
+      <span class="toolbar-label">🔧 管理員導航：</span>
+      <select v-model="adminSelectedIssue" @change="handleAdminIssueChange" class="admin-select">
+        <option v-for="issue in allIssues" :key="issue.id" :value="issue.id">
+          Vol.{{ issue.id }} - {{ issue.title }} {{ !issue.is_published ? "(草稿)" : "" }}
+        </option>
+      </select>
+    </div>
 
-    <section class="section-text">
-      <p>
-        《無境界者》雜誌是一個不以教會為本位的自由信仰論述平台，亦是一個實驗性質的線上雜誌，會定期在雙數月月底發刊。每一期皆會有一個當期主題，投稿者可以按照當期主題投稿，也可以自由發揮。
-      </p>
-    </section>
-
-    <div v-if="loading" class="status-msg">正在載入徵稿資訊...</div>
+    <div v-if="loading" class="loading-state">
+      正在載入投稿資訊 🕊️<span class="loading-dots"></span>
+    </div>
 
     <div v-else-if="!currentTheme" class="status-msg">目前尚無徵稿資訊。</div>
 
     <section id="theme" v-else>
+      <section class="section-text">
+        <p>
+          《無境界者》雜誌是一個不以教會為本位的自由信仰論述平台，亦是一個實驗性質的線上雜誌，會定期在雙數月月底發刊。每一期皆會有一個當期主題，投稿者可以按照當期主題投稿，也可以自由發揮。
+        </p>
+      </section>
       <h3>
         ☆下期徵稿主題
         <span v-if="isEditor" style="font-size: 0.6em; color: #999">(預覽模式)</span>
@@ -220,7 +254,28 @@ onMounted(() => {
 <style scoped>
 @import "@/assets/base.css";
 
-/* ... (通用設定保持不變) ... */
+/* ⭐ 新增：後台工具列樣式 */
+.admin-toolbar {
+  background-color: #fff3cd;
+  padding: 15px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  border: 1px solid #ffeeba;
+  justify-content: center;
+}
+.toolbar-label {
+  font-weight: bold;
+  color: #856404;
+  margin-right: 10px;
+}
+.admin-select {
+  padding: 5px 10px;
+  border-radius: 4px;
+  border: 1px solid #ddd;
+  font-size: 1rem;
+}
 
 p {
   text-indent: 2rem;
@@ -255,12 +310,10 @@ h3 {
   font-size: 1.5rem;
 }
 
-/* ⭐ 修改 1：徵稿主題外框 (加大間距) */
 .theme-block {
   background-color: rgba(255, 255, 255, 0.6);
   border: 1px solid #ccc;
   border-radius: 10px;
-  /* 上下 30px，左右 60px (原本是 20px 30px) */
   padding: 30px 60px;
   margin-bottom: 2rem;
 }
@@ -286,18 +339,19 @@ h3 {
   margin: 0 auto;
 }
 
+/* ⭐ 修改：截稿期限顏色 (桃紅色) */
 .deadline {
   text-align: right;
   font-weight: bold;
   margin-top: 2rem;
   margin-right: 10px;
+  color: #e91e63; /* 桃紅色 */
 }
 
-/* ⭐ 修改 3：投稿類型列表 (增加每列高度) */
 .type-item {
   display: flex;
   align-items: center;
-  padding: 15px 0; /* 上下增加間距，讓列變高 */
+  padding: 15px 0;
   border-bottom: 1px dashed #eee;
 }
 
@@ -327,7 +381,6 @@ h3 {
   text-indent: 0 !important;
 }
 
-/* 顏色區塊 */
 .type-block.red {
   background-color: #8b0000;
 }
@@ -401,15 +454,56 @@ a:hover {
   text-indent: 0 !important;
 }
 
-/* RWD 手機版調整 */
+/* ===========================
+   新增：載入動畫樣式
+   =========================== */
+.loading-state {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 50vh; /* 讓它垂直置中，高度佔畫面一半 */
+  font-size: 2rem; /* 字體大小 */
+  color: #888;
+  font-family: serif; /* 如果想要跟內文一樣用襯線體 */
+  font-weight: bold;
+}
+
+.loading-dots::after {
+  content: "";
+  animation: dots-cycle 2s infinite steps(1);
+}
+
+@keyframes dots-cycle {
+  0% {
+    content: "";
+  }
+  15% {
+    content: ".";
+  }
+  30% {
+    content: "..";
+  }
+  45% {
+    content: "...";
+  }
+  60% {
+    content: "....";
+  }
+  75% {
+    content: ".....";
+  }
+  90% {
+    content: "......";
+  }
+}
+
 @media (max-width: 768px) {
   .theme-block {
-    padding: 20px 20px; /* 手機版不需要那麼寬的邊距，避免內容太窄 */
+    padding: 20px 20px;
   }
   .theme-description {
-    margin: 0; /* 手機版取消額外內縮 */
+    margin: 0;
   }
-
   .type-item {
     flex-direction: column;
     align-items: flex-start;
