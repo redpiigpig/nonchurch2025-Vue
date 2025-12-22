@@ -237,6 +237,7 @@ watch(
 );
 
 onMounted(() => {
+  document.title = "無境界者雜誌";
   fetchIssues();
 });
 </script>
@@ -930,7 +931,7 @@ h2 {
 }
 .search-input {
   width: 300px;
-  height: 30px;
+  height: 40px;
 }
 .btn-search {
   background-color: #28a745;

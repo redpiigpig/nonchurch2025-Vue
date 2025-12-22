@@ -6,6 +6,7 @@ import HomeView from "../views/HomeView.vue";
 import MissionView from "../views/MissionView.vue";
 import ArticleListView from "../views/ArticleListView.vue";
 import AuthorView from "../views/AuthorView.vue";
+import AuthorDetailView from "../views/AuthorDetailView.vue";
 import ArticleContent from "../views/ArticleContent.vue";
 import SearchView from "../views/SearchView.vue";
 import LoginView from "../views/LoginView.vue";
@@ -30,6 +31,11 @@ const router = createRouter({
     { path: "/home/issue/:issueNumber", name: "home-issue", component: HomeView, props: true },
     { path: "/mission", name: "mission", component: MissionView },
     { path: "/authors", name: "authors", component: AuthorView },
+    {
+      path: "/authors/:name",
+      name: "author-detail",
+      component: AuthorDetailView,
+    },
     { path: "/articles", name: "article-list", component: ArticleListView },
     { path: "/articles/:id", name: "article-detail", component: ArticleContent },
     { path: "/preview", name: "article-preview", component: ArticleContent },

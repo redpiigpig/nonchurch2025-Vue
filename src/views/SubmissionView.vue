@@ -55,6 +55,7 @@ watch(
 );
 
 onMounted(() => {
+  document.title = "投稿資訊 - 無境界者雜誌";
   fetchThemeData();
 });
 </script>
@@ -80,14 +81,12 @@ onMounted(() => {
     <section id="theme" v-else>
       <h3>☆下期徵稿主題</h3>
       <div class="theme-block">
-        <h4 class="theme-date">{{ currentTheme.date }} (第 {{ currentTheme.id }} 期)</h4>
-
-        <h4 class="theme-title">徵稿主題：《{{ currentTheme.cfp_title }}》</h4>
+        <h2 class="theme-title">徵稿主題：《{{ currentTheme.cfp_title }}》</h2>
 
         <div class="theme-image" v-if="currentTheme.cfp_image">
           <img :src="currentTheme.cfp_image" :alt="currentTheme.cfp_title" />
         </div>
-
+        <br />
         <div class="theme-description">
           <p v-for="(para, index) in themeParagraphs" :key="index">
             {{ para }}
@@ -269,12 +268,15 @@ h3 {
   text-align: left;
 }
 
+/* ⭐ 修改點：徵稿主題標題樣式 (標楷體) */
 .theme-title {
   text-align: center;
-  font-size: 1.5rem;
+  font-size: 1.8rem; /* 稍微加大 */
   font-weight: bold;
   margin-bottom: 1rem;
   color: #333;
+  /* 設定標楷體，並提供備選字型 */
+  font-family: "KaiTi", "BiauKai", "DFKai-SB", "TW-Kai", serif;
 }
 
 .theme-image {
@@ -332,37 +334,37 @@ h3 {
   color: #555;
   line-height: 1.6;
   text-align: justify;
-  text-indent: 0 !important; /* 類型描述若不希望縮排可保留此行，若要縮排請移除 */
+  text-indent: 0 !important;
 }
 
-/* ⭐ 顏色分類 (依照您提供的色碼) */
+/* 顏色分類 */
 .type-block.red {
   background-color: #8b0000;
-} /* 深紅 */
+}
 .type-block.orange {
   background-color: #ff8000;
-} /* 深橙 */
+}
 .type-block.yellow {
-  background-color: #b8860b;
-} /* 深黃 */
+  background-color: #f0e137;
+}
 .type-block.green {
   background-color: #46b175;
-} /* 淺綠 */
+}
 .type-block.blue {
   background-color: #4682b4;
-} /* 深藍 */
+}
 .type-block.indigo {
   background-color: #27408b;
-} /* 靛藍 */
+}
 .type-block.purple {
   background-color: #6a5acd;
-} /* 深紫 */
+}
 .type-block.soil {
   background-color: #7d6c29;
-} /* 土黃 - 替換原有的 grass */
+}
 .type-block.pink {
   background-color: #db7093;
-} /* 粉紅 */
+}
 
 /* ==========================
   連結樣式
@@ -386,6 +388,12 @@ a:hover {
 
 #submit h2 {
   text-align: center;
+}
+
+/* ⭐ 修改點：強制這個區塊的 p 置中 */
+#submit p {
+  text-align: center !important;
+  text-indent: 0 !important;
 }
 
 .submit-button {

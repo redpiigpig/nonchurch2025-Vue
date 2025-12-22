@@ -3,7 +3,7 @@ magazine-web/
 ├── .gitignore
 ├── .gitattributes
 ├── .vscode/
-│   └── extensions.json
+│   └── `extensions.json`
 ├── index.html
 ├── jsconfig.json
 ├── package.json
@@ -11,75 +11,53 @@ magazine-web/
 ├── README.md
 ├── vite.config.js
 ├── eslint.config.js
+├── tree.txt
 ├── public/
-│   ├── articles/
-│   │   ├── 5-13話語與肉身.md
-│   │   └── 5-13話語與肉身.json
-│   ├── images/
-│   │   ├── system/
-│   │   │   ├── 封面Logo.png
-│   │   │   ├── 封面題字.png
-│   │   │   └── 網站Logo.png
-│   │   ├── covers/
-│   │   │   ├── cover-1.png
-│   │   │   ├── cover-2.png
-│   │   │   └── ...
-│   │   ├── authors/
-│   │   │   ├── author_1.jpg
-│   │   │   ├── author_2.jpg
-│   │   │   └── ...
-│   │   └── articles/
-│   │       ├── issue-1/
-│   │       ├── issue-2/
-│   │       ├── issue-3/
-│   │       ├── issue-4/
-│   │       ├── issue-5/
-│   │       └── issue-6/
-│   └── magazines/
-│       ├── 無境界者Vol.1.pdf
-│       ├── 無境界者Vol.2.pdf
-│       ├── 無境界者Vol.3.pdf
-│       └── 無境界者Vol.5.pdf
+│   ├── articles/ (omitted except important files)
+│   │   ├── `5-13話語與肉身.md`
+│   │   └── `5-13話語與肉身.json`
+│   ├── images/ (omitted)
+│   └── magazines/ (omitted)
 └── src/
     ├── App.vue
     ├── main.js
     ├── supabase.js
     ├── assets/
-    │   ├── article.css
-    │   ├── base.css
-    │   └── main.css
+    │   ├── `article.css`
+    │   └── `base.css`
     ├── components/
-    │   ├── AppHeader.vue
-    │   ├── AppFooter.vue
-    │   ├── MainLayout.vue
-    │   └── icons/
-    │       ├── IconCommunity.vue
-    │       ├── IconDocumentation.vue
-    │       ├── IconEcosystem.vue
-    │       ├── IconSupport.vue
-    │       └── IconTooling.vue
+    │   ├── `AppHeader.vue`
+    │   ├── `AppFooter.vue`
+    │   └── `MainLayout.vue`
+    ├── components/icons/
+    │   ├── `IconCommunity.vue`
+    │   ├── `IconDocumentation.vue`
+    │   ├── `IconEcosystem.vue`
+    │   ├── `IconSupport.vue`
+    │   └── `IconTooling.vue`
     ├── composables/
-    │   └── useEditorMode.js
+    │   └── `useEditorMode.js`
     ├── router/
-    │   └── index.js
+    │   └── `index.js`
     ├── stores/
-    │   └── tempArticles.js
+    │   └── `tempArticles.js`
     ├── data/
-    │   ├── authors.js
-    │   ├── issues.js
-    │   └── submissionThemes.js
+    │   ├── `authors.js`
+    │   ├── `issues.js`
+    │   └── `submissionThemes.js`
     └── views/
-        ├── HomeView.vue
-        ├── ArticleListView.vue
-        ├── ArticleContent.vue
-        ├── AuthorView.vue
-        ├── LoginView.vue
-        ├── MissionView.vue
-        ├── SearchView.vue
-        ├── SubmissionView.vue
+        ├── `HomeView.vue`
+        ├── `ArticleListView.vue`
+        ├── `ArticleContent.vue`
+        ├── `AuthorView.vue`
+        ├── `AuthorDetailView.vue`
+        ├── `LoginView.vue`
+        ├── `MissionView.vue`
+        ├── `SearchView.vue`
+        ├── `SubmissionView.vue`
         └── admin/
-            ├── AdminLayout.vue
-            ├── EditorView.vue
-            ├── ArticleListManager.vue
-            ├── AuthorManager.vue
-            └── IssueManager.vue
+            ├── `AdminLayout.vue`
+            ├── `EditorView.vue`
+            ├── `ArticleListManager.vue`
+            ├── `AuthorManager.vue`
+            └── `IssueManager.vue`

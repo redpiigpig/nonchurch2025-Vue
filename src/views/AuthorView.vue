@@ -1,10 +1,11 @@
 <script setup>
 import { ref, watch, onMounted } from "vue";
 import MainLayout from "../components/MainLayout.vue";
-// 1. 移除本地資料 import
-// import { authors } from "../data/authors.js";
-// 2. 改為引入 Supabase
 import { supabase } from "../supabase";
+// 1. 引入編輯模式判斷
+import { useEditorMode } from "../composables/useEditorMode";
+
+const { isEditor } = useEditorMode();
 
 const selectedYear = ref(2025);
 const yearOptions = [
@@ -22,10 +23,16 @@ const isLoading = ref(true); // 增加一個讀取狀態
 const fetchAuthors = async () => {
   try {
     isLoading.value = true;
-    const { data, error } = await supabase
-      .from("authors")
-      .select("*")
-      .order("id", { ascending: true });
+
+    // 2. 建立查詢
+    let query = supabase.from("authors").select("*").order("id", { ascending: true });
+
+    // 3. 關鍵邏輯：如果「不是」編輯模式，就只抓「已發布」的
+    if (!isEditor.value) {
+      query = query.eq("is_published", true);
+    }
+
+    const { data, error } = await query;
 
     if (error) throw error;
 
@@ -58,6 +65,11 @@ const updateAuthors = () => {
 
 watch(selectedYear, () => {
   updateAuthors();
+});
+
+// 4. 監聽模式變化 (例如登入/登出)，即時重新抓取資料
+watch(isEditor, () => {
+  fetchAuthors();
 });
 
 onMounted(() => {
@@ -98,6 +110,8 @@ onMounted(() => {
 
       <div v-else class="authors-list">
         <div v-for="author in randomizedAuthors" :key="author.id" class="author-box">
+          <div v-if="isEditor && !author.is_published" class="draft-badge">隱藏中</div>
+
           <div class="author-info">
             <div
               class="author-image"
@@ -110,7 +124,7 @@ onMounted(() => {
 
           <div class="author-bio">
             <p>{{ author.bio }}</p>
-            <router-link :to="`/authors/${author.id}`" class="read-more-btn">
+            <router-link :to="`/authors/${author.name}`" class="read-more-btn">
               閱讀此作者文章
             </router-link>
           </div>
@@ -150,12 +164,28 @@ onMounted(() => {
 
   max-width: 900px;
   transition: transform 0.3s ease, box-shadow 0.3s ease;
+
+  /* 6. 為了定位隱藏標籤，這裡要加上 relative */
+  position: relative;
 }
 
 .author-box:hover {
   transform: translateY(-3px);
   box-shadow: 0 6px 12px rgba(0, 0, 0, 0.1);
   background-color: rgba(255, 255, 255, 0.9);
+}
+
+/* 7. 隱藏狀態標籤 (僅後台可見) */
+.draft-badge {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background-color: #999;
+  color: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  z-index: 10;
 }
 
 .author-info {
