@@ -21,6 +21,7 @@ const form = ref({
   issue: 5,
   issue_title: "誕神者",
   category: "",
+  section: "",
   author: "",
   author_title: "",
   remark: "",
@@ -47,6 +48,8 @@ const categories = [
   { name: "實驗園地", color: "#db7093" },
 ];
 
+const sections = ["", "特稿專區", "主題廣場", "多元講堂"];
+
 const currentCategoryColor = computed(() => {
   const cat = categories.find((c) => c.name === form.value.category);
   return cat ? cat.color : "#ccc";
@@ -63,7 +66,6 @@ const previewContent = computed(() => {
     content += "</ol></div>";
   }
 
-  // 自動將單次換行轉為段落
   const formattedContent = content.replace(/([^\n])\n([^\n])/g, "$1\n\n$2");
   return marked.parse(formattedContent, { gfm: true, breaks: true });
 });
@@ -80,15 +82,11 @@ onMounted(async () => {
     return;
   }
 
-  // 1. 如果有 ID，代表是編輯舊文章
   if (route.params.id) {
     isEditMode.value = true;
     loadArticle(route.params.id);
-  }
-  // 2. 🔥 新增邏輯：如果是新增文章，檢查是否有期數參數
-  else if (route.query.issue) {
+  } else if (route.query.issue) {
     form.value.issue = parseInt(route.query.issue);
-    // 如果有傳來期數標題，也順便填入
     if (route.query.issueTitle) {
       form.value.issue_title = route.query.issueTitle;
     }
@@ -102,6 +100,8 @@ const loadArticle = async (id) => {
     alert("讀取失敗");
   } else {
     form.value = { ...data };
+
+    if (!form.value.section) form.value.section = "";
 
     if (data.prev_article) form.value.prev_id = data.prev_article.id;
     if (data.next_article) form.value.next_id = data.next_article.id;
@@ -131,9 +131,7 @@ const handlePreview = () => {
     prev: form.value.prev_id ? { id: form.value.prev_id, title: "預覽中..." } : null,
     next: form.value.next_id ? { id: form.value.next_id, title: "預覽中..." } : null,
   };
-
   localStorage.setItem("preview_article", JSON.stringify(previewData));
-
   const routeData = router.resolve({ name: "article-preview" });
   window.open(routeData.href, "_blank");
 };
@@ -158,7 +156,6 @@ const saveArticle = async () => {
     delete payload.next_id;
 
     const { error } = await supabase.from("articles").upsert(payload);
-
     if (error) throw error;
 
     alert("儲存成功！🎉");
@@ -170,6 +167,7 @@ const saveArticle = async () => {
   }
 };
 
+// 註釋邏輯
 const addFootnote = () => {
   const nextId = form.value.footnotes.length + 1;
   form.value.footnotes.push({ id: nextId, text: "" });
@@ -177,7 +175,42 @@ const addFootnote = () => {
 
 const removeFootnote = (index) => {
   form.value.footnotes.splice(index, 1);
-  form.value.footnotes.forEach((note, idx) => (note.id = idx + 1));
+  reindexFootnotes();
+};
+
+// ⭐ 新增：直接修改數字排序邏輯
+const updateFootnoteOrder = (currentIndex, event) => {
+  const newId = parseInt(event.target.value);
+
+  // 防呆：如果輸入無效數字，重置回原本數字
+  if (isNaN(newId) || newId < 1) {
+    event.target.value = currentIndex + 1;
+    return;
+  }
+
+  // 1. 計算新的 Index (數字 - 1)
+  let newIndex = newId - 1;
+
+  // 2. 限制範圍 (不能超過陣列長度)
+  if (newIndex >= form.value.footnotes.length) {
+    newIndex = form.value.footnotes.length - 1;
+  }
+
+  // 如果位置沒變，不動作
+  if (newIndex === currentIndex) return;
+
+  // 3. 移動陣列元素
+  const item = form.value.footnotes.splice(currentIndex, 1)[0]; // 取出
+  form.value.footnotes.splice(newIndex, 0, item); // 插入新位置
+
+  // 4. 全部重新編號 1, 2, 3...
+  reindexFootnotes();
+};
+
+const reindexFootnotes = () => {
+  form.value.footnotes.forEach((note, idx) => {
+    note.id = idx + 1;
+  });
 };
 
 const insertOrWrap = async (
@@ -195,7 +228,6 @@ const insertOrWrap = async (
   const originalText = form.value.content;
   const selectedText = originalText.substring(start, end);
 
-  // 檢查標籤使用 togglePrefix/toggleSuffix，若無則使用 prefix/suffix
   const checkPrefix = togglePrefix || prefix;
   const checkSuffix = toggleSuffix || suffix;
 
@@ -203,48 +235,39 @@ const insertOrWrap = async (
   let newSelectionStart = 0;
   let newSelectionEnd = 0;
 
-  // 1. 檢查選取的文字是否已經被標籤包裹 (檢查前後是否匹配)
   const isWrapped =
     originalText.substring(start - checkPrefix.length, start) === checkPrefix &&
     originalText.substring(end, end + checkSuffix.length) === checkSuffix;
 
   if (isWrapped) {
-    // 情況 1: 移除標籤 (Toggle Off)
     newText =
       originalText.substring(0, start - checkPrefix.length) +
       selectedText +
       originalText.substring(end + checkSuffix.length);
-
     newSelectionStart = start - checkPrefix.length;
     newSelectionEnd = newSelectionStart + selectedText.length;
   } else if (selectedText.length > 0) {
-    // 情況 2: 包裹選取的文字 (Wrap)
     newText =
       originalText.substring(0, start) +
       prefix +
       selectedText +
       suffix +
       originalText.substring(end);
-
     newSelectionStart = start + prefix.length;
     newSelectionEnd = newSelectionStart + selectedText.length;
   } else {
-    // 情況 3: 插入預設文字 (Insert Default)
     newText =
       originalText.substring(0, start) +
       prefix +
       defaultText +
       suffix +
       originalText.substring(end);
-
     newSelectionStart = start + prefix.length;
     newSelectionEnd = newSelectionStart + defaultText.length;
   }
 
   form.value.content = newText;
-
   await nextTick();
-
   textarea.focus({ preventScroll: true });
   textarea.setSelectionRange(newSelectionStart, newSelectionEnd);
 };
@@ -262,7 +285,6 @@ const insertBlock = async (template) => {
   textarea.selectionStart = textarea.selectionEnd = start + template.length;
 };
 
-// 【修改】tools 陣列：加入「置右」和「小字體」
 const tools = [
   { label: "H2 副標", action: () => insertOrWrap("## ", "\n", "輸入標題") },
   { label: "H3 小標", action: () => insertOrWrap("### ", "\n", "輸入標題") },
@@ -281,14 +303,11 @@ const tools = [
   },
   { label: "去除縮排", action: () => insertOrWrap('<p class="no-indent">', "</p>", "無縮排文字") },
   { label: "分隔線", action: () => insertBlock('\n<div class="custom-divider"></div>\n') },
-
-  // --- 新增的功能 ---
   {
     label: "置右",
     action: () => {
       const prefix = '<span style="display: block; text-align: right;">';
       const suffix = "</span>";
-      // 由於 text-align: right 是 span 的樣式，所以檢查時只需要 prefix/suffix 即可
       insertOrWrap(prefix, suffix, "請在此輸入置右文字", prefix, suffix);
     },
   },
@@ -297,11 +316,9 @@ const tools = [
     action: () => {
       const prefix = '<span style="font-size: 1rem; font-family: serif;">';
       const suffix = "</span>";
-      // 由於 font-size/font-family 是 span 的樣式，所以檢查時只需要 prefix/suffix 即可
       insertOrWrap(prefix, suffix, "請在此輸入小字體文字", prefix, suffix);
     },
   },
-  // --------------------
 ];
 
 const components = [
@@ -316,7 +333,6 @@ const components = [
     label: "❝ 書本引言",
     action: () =>
       insertBlock(
-        // 【修正 2】移除 "引用的內文..." 和 <div class="book-quote-rel"> 前面的空格
         `<div class="book-quote">\n引用的內文...\n<div class="book-quote-rel"> ──《書名》，頁數 </div>\n</div>\n`
       ),
   },
@@ -363,26 +379,16 @@ const components = [
   {
     label: "📜 參考資料",
     action: () => {
-      // 1. 彈出提示，詢問要生成幾列
       let numRows = prompt("請輸入參考資料的列數（預設為 2）：", "2");
-
-      // 檢查輸入是否為有效數字，否則默認為 2
       numRows = parseInt(numRows);
-      if (isNaN(numRows) || numRows <= 0) {
-        numRows = 2;
-      }
-
+      if (isNaN(numRows) || numRows <= 0) numRows = 2;
       let listItems = "";
-
-      // 2. 根據列數生成列表項目
       for (let i = 1; i <= numRows; i++) {
         listItems += `
     <div style="text-indent: -1.5rem; padding-left: 1.5rem; margin-bottom: 1rem; line-height: 1.8;">
       •&nbsp;&nbsp;資料來源${i}...
     </div>`;
       }
-
-      // 3. 組合完整的 HTML 區塊
       const template = `
 <div class="reference-box">
   <strong>參考資料</strong>
@@ -390,61 +396,43 @@ const components = [
   </div>
 </div>
 `;
-
-      // 4. 插入到編輯器中
       insertBlock(template);
     },
   },
   {
     label: "📊 表格",
     action: () => {
-      // 1. 彈出提示，詢問尺寸
       let sizeInput = prompt("請輸入表格尺寸 (欄x列)，例如：3x4。預設為 2x5：", "2x5");
-
-      let cols = 2; // 預設欄數
-      let rows = 5; // 預設列數
-
+      let cols = 2;
+      let rows = 5;
       if (sizeInput) {
-        // 解析輸入，格式應為 C x R
         const parts = sizeInput.toLowerCase().split(/[x\*]/);
-
         if (parts.length === 2) {
           const c = parseInt(parts[0].trim());
           const r = parseInt(parts[1].trim());
-
-          // 確保是有效的正整數
           if (!isNaN(c) && c > 0) cols = c;
           if (!isNaN(r) && r > 0) rows = r;
         }
       }
-
-      // 2. 動態生成表頭 (thead)
       let tableHeader = "  <thead>\n    <tr>";
       for (let i = 1; i <= cols; i++) {
         tableHeader += `\n      <th>標題${i}</th>`;
       }
       tableHeader += "\n    </tr>\n  </thead>";
-
-      // 3. 動態生成表身 (tbody)
       let tableBody = "  <tbody>";
       for (let r = 1; r <= rows; r++) {
         tableBody += "\n    <tr>";
         for (let c = 1; c <= cols; c++) {
-          // 確保內容可編輯，這裡放內容提示
           tableBody += `\n      <td>內容 ${r}-${c}</td>`;
         }
         tableBody += "\n    </tr>";
       }
       tableBody += "\n  </tbody>";
-
-      // 4. 組合完整的 HTML 區塊
       const template = `
 <table class="data-table">
 ${tableHeader}
 ${tableBody}
 </table>\n`;
-
-      // 5. 插入到編輯器中
       insertBlock(template);
     },
   },
@@ -460,7 +448,6 @@ ${tableBody}
       </div>
       <div class="header-right">
         <button class="btn-preview-page" @click="handlePreview">📑 預覽頁面</button>
-
         <button class="btn-save" @click="saveArticle" :disabled="loading">
           {{ loading ? "處理中..." : "💾 發佈文章" }}
         </button>
@@ -469,94 +456,130 @@ ${tableBody}
 
     <div class="editor-content">
       <section class="editor-card collapsed-group">
-        <div class="card-title">基本資料設定</div>
-        <div class="form-grid">
-          <div class="form-group">
-            <label>文章 ID</label>
-            <input
-              v-model="form.id"
-              :disabled="isEditMode"
-              class="input-field"
-              placeholder="例如: 5-14文章標題"
-            />
-          </div>
-          <div class="form-group">
-            <label>文章分類</label>
-            <div class="select-wrapper">
-              <div class="color-dot" :style="{ backgroundColor: currentCategoryColor }"></div>
+        <div class="card-header-wrapper">
+          <div class="card-title">基本資料設定</div>
+        </div>
 
-              <select v-model="form.category" class="input-field select-field">
-                <option value="">（無分類）</option>
+        <div class="card-body">
+          <div class="form-grid">
+            <div class="form-group full-width">
+              <div style="display: flex; gap: 15px">
+                <div style="flex: 2">
+                  <label>文章 ID</label>
+                  <input
+                    v-model="form.id"
+                    :disabled="isEditMode"
+                    class="input-field"
+                    placeholder="例如: 5-14文章標題"
+                  />
+                </div>
 
-                <option v-for="cat in categories" :key="cat.name" :value="cat.name">
-                  {{ cat.name }}
-                </option>
-              </select>
+                <div style="flex: 1; position: relative">
+                  <label>文章分類</label>
+                  <div class="select-wrapper">
+                    <div class="color-dot" :style="{ backgroundColor: currentCategoryColor }"></div>
+                    <select v-model="form.category" class="input-field select-field">
+                      <option value="">（無分類）</option>
+                      <option v-for="cat in categories" :key="cat.name" :value="cat.name">
+                        {{ cat.name }}
+                      </option>
+                    </select>
+                  </div>
+                </div>
+
+                <div style="flex: 1">
+                  <label>文章區塊 (Section)</label>
+                  <select v-model="form.section" class="input-field">
+                    <option value="">（無）</option>
+                    <option v-for="sec in sections" :key="sec" :value="sec" v-show="sec !== ''">
+                      {{ sec }}
+                    </option>
+                  </select>
+                </div>
+              </div>
             </div>
-          </div>
-          <div class="form-group full-width">
-            <label>主標題</label>
-            <input v-model="form.title" class="input-field title-input" />
-          </div>
-          <div class="form-group full-width">
-            <label>副標題</label>
-            <input v-model="form.subtitle" class="input-field" />
-          </div>
-          <div class="form-group" style="width: 70%">
-            <label>期數 / 標題</label>
-            <div style="display: flex; gap: 10px">
-              <input v-model="form.issue" type="number" class="input-field" style="width: 80px" />
-              <input v-model="form.issue_title" class="input-field" style="flex: 1" />
+
+            <div class="form-group full-width">
+              <label>主標題</label>
+              <input v-model="form.title" class="input-field title-input" />
             </div>
-          </div>
-          <div class="form-group" style="width: 130%; margin-left: -30%">
-            <label>作者 / 職稱 / 備註</label>
-            <div style="display: flex; gap: 10px">
-              <input v-model="form.author" class="input-field" style="flex: 0.5" />
-              <input v-model="form.author_title" class="input-field" style="flex: 1" />
-              <input v-model="form.remark" class="input-field" style="flex: 1" />
+            <div class="form-group full-width">
+              <label>副標題</label>
+              <input v-model="form.subtitle" class="input-field" />
             </div>
-          </div>
 
-          <div class="form-group full-width">
-            <label>關鍵字</label>
-            <input v-model="form.keyword" class="input-field" placeholder="**🌿 關鍵字**：..." />
-          </div>
+            <div class="form-group full-width">
+              <div style="display: flex; gap: 20px; align-items: flex-end">
+                <div style="flex: 0 0 100px">
+                  <label>期數</label>
+                  <input v-model="form.issue" type="number" class="input-field" />
+                </div>
+                <div style="flex: 1">
+                  <label>期數標題</label>
+                  <input v-model="form.issue_title" class="input-field" />
+                </div>
+              </div>
+            </div>
 
-          <div class="form-group full-width">
-            <label>文章簡介 (Summary)</label>
-            <textarea
-              v-model="form.summary"
-              class="summary-textarea"
-              placeholder="請輸入吸引人的文章摘要..."
-            ></textarea>
-          </div>
+            <div class="form-group full-width">
+              <div style="display: flex; gap: 15px">
+                <div style="flex: 1">
+                  <label>作者</label>
+                  <input v-model="form.author" class="input-field" />
+                </div>
+                <div style="flex: 1">
+                  <label>職稱 (Title)</label>
+                  <input v-model="form.author_title" class="input-field" />
+                </div>
+                <div style="flex: 1">
+                  <label>備註 (Remark)</label>
+                  <input v-model="form.remark" class="input-field" />
+                </div>
+              </div>
+            </div>
 
-          <div class="form-group">
-            <label>上一篇文章 ID (Prev)</label>
-            <input
-              v-model="form.prev_id"
-              class="input-field"
-              placeholder="輸入 ID 例如: 5-12權力..."
-            />
-          </div>
-          <div class="form-group">
-            <label>下一篇文章 ID (Next)</label>
-            <input
-              v-model="form.next_id"
-              class="input-field"
-              placeholder="輸入 ID 例如: 5-14未來..."
-            />
+            <div class="form-group full-width">
+              <label>關鍵字</label>
+              <input v-model="form.keyword" class="input-field" placeholder="**🌿 關鍵字**：..." />
+            </div>
+
+            <div class="form-group full-width">
+              <label>文章簡介 (Summary)</label>
+              <textarea
+                v-model="form.summary"
+                class="summary-textarea"
+                placeholder="請輸入吸引人的文章摘要..."
+              ></textarea>
+            </div>
+
+            <div class="form-group">
+              <label>上一篇文章 ID (Prev)</label>
+              <input
+                v-model="form.prev_id"
+                class="input-field"
+                placeholder="輸入 ID 例如: 5-12權力..."
+              />
+            </div>
+            <div class="form-group">
+              <label>下一篇文章 ID (Next)</label>
+              <input
+                v-model="form.next_id"
+                class="input-field"
+                placeholder="輸入 ID 例如: 5-14未來..."
+              />
+            </div>
           </div>
         </div>
       </section>
 
       <section class="editor-card full-editor-card">
-        <div class="card-title-row">
-          <span class="card-title-text">文章內文 (Markdown)</span>
-          <button class="btn-preview-inline" @click="showPreview = !showPreview">
-            {{ showPreview ? "👁️ 關閉預覽" : "👁️ 開啟預覽" }}
-          </button>
+        <div class="card-header-wrapper">
+          <div class="card-title-row">
+            <span class="card-title-text">文章內文 (Markdown)</span>
+            <button class="btn-preview-inline" @click="showPreview = !showPreview">
+              {{ showPreview ? "👁️ 關閉預覽" : "👁️ 開啟預覽" }}
+            </button>
+          </div>
         </div>
 
         <div class="toolbar">
@@ -596,22 +619,36 @@ ${tableBody}
       </section>
 
       <section class="editor-card">
-        <div class="card-title">
-          註釋管理
-          <button @click="addFootnote" class="btn-mini-add">+ 新增</button>
+        <div class="card-header-wrapper">
+          <div class="card-title">
+            註釋管理
+            <button @click="addFootnote" class="btn-mini-add">+ 新增</button>
+          </div>
         </div>
-        <div class="footnotes-list">
-          <div v-for="(note, index) in form.footnotes" :key="index" class="footnote-row">
-            <span class="note-badge">{{ note.id }}</span>
-            <input v-model="note.text" class="input-field note-input" />
-            <button @click="removeFootnote(index)" class="btn-icon-del">✕</button>
+        <div class="card-body">
+          <div class="footnotes-list">
+            <div v-for="(note, index) in form.footnotes" :key="index" class="footnote-row">
+              <input
+                type="number"
+                class="note-number-input"
+                :value="note.id"
+                @change="(e) => updateFootnoteOrder(index, e)"
+              />
+
+              <input v-model="note.text" class="input-field note-input" />
+              <button @click="removeFootnote(index)" class="btn-icon-del" title="刪除">✕</button>
+            </div>
           </div>
         </div>
       </section>
 
       <section class="editor-card collapsed-group">
-        <div class="card-title">SEO 設定</div>
-        <textarea v-model="seoJson" class="json-textarea"></textarea>
+        <div class="card-header-wrapper">
+          <div class="card-title">SEO 設定</div>
+        </div>
+        <div class="card-body">
+          <textarea v-model="seoJson" class="json-textarea"></textarea>
+        </div>
       </section>
     </div>
   </div>
@@ -631,12 +668,14 @@ select {
   background-color: #f4f6f8;
   min-height: 100vh;
   padding-bottom: 60px;
+  width: 100%;
+  overflow-x: hidden;
 }
 
 .editor-header {
   position: sticky;
-  top: 0;
-  z-index: 100;
+  top: 0px;
+  z-index: 90;
   background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(5px);
   border-bottom: 1px solid #ddd;
@@ -644,6 +683,14 @@ select {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+}
+
+@media (max-width: 768px) {
+  .editor-header {
+    top: 0;
+    padding: 10px 15px;
+  }
 }
 
 .header-left h2 {
@@ -656,37 +703,51 @@ select {
 .editor-content {
   max-width: 1400px;
   margin: 20px auto;
-  padding: 0 20px;
   display: flex;
   flex-direction: column;
   gap: 20px;
+  box-sizing: border-box;
 }
 
+/* ⭐ 結構修正：卡片與標題 */
 .editor-card {
   background: white;
   border-radius: 8px;
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
-  padding: 20px;
   border: 1px solid #eaeaea;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow: hidden; /* 防止內容溢出 */
+}
+
+/* 標題區塊 Wrapper (確保標題獨佔一行) */
+.card-header-wrapper {
+  border-bottom: 1px solid #eee;
+  padding: 15px 20px;
+  background-color: #fafafa;
+}
+
+/* 內容區塊 Wrapper */
+.card-body {
+  padding: 20px;
 }
 
 .card-title {
   font-size: 1.1rem;
   font-weight: bold;
   color: #2c3e50;
-  margin-bottom: 20px;
   border-left: 4px solid #007bff;
   padding-left: 10px;
   display: flex;
   justify-content: space-between;
   align-items: center;
+  margin: 0;
 }
 
 .card-title-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 15px;
   border-left: 4px solid #007bff;
   padding-left: 10px;
 }
@@ -695,6 +756,7 @@ select {
   font-weight: bold;
   color: #2c3e50;
 }
+
 .btn-preview-inline {
   background-color: #f0f7ff;
   color: #007bff;
@@ -709,13 +771,12 @@ select {
   background-color: #d6eaff;
 }
 
+/* 編輯器分割視窗 */
 .editor-split-view {
   display: flex;
   height: 700px;
   border: 1px solid #ddd;
   border-top: none;
-  border-bottom-left-radius: 8px;
-  border-bottom-right-radius: 8px;
   overflow: hidden;
 }
 
@@ -770,8 +831,6 @@ select {
   gap: 10px;
   align-items: center;
   flex-wrap: wrap;
-  border-top-left-radius: 8px;
-  border-top-right-radius: 8px;
 }
 .toolbar-group {
   display: flex;
@@ -816,10 +875,12 @@ select {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 15px;
+  width: 100%;
 }
 .full-width {
   grid-column: 1 / -1;
 }
+
 .form-group label {
   display: block;
   font-size: 0.9rem;
@@ -898,7 +959,6 @@ select {
   background: #ccc;
 }
 
-/* 【新增】預覽按鈕樣式 */
 .btn-preview-page {
   background: #17a2b8;
   color: white;
@@ -924,6 +984,8 @@ select {
   background: #f0f0f0;
   color: #333;
 }
+
+/* 註釋列表 */
 .footnotes-list {
   display: flex;
   flex-direction: column;
@@ -934,13 +996,21 @@ select {
   align-items: center;
   gap: 10px;
 }
-.note-badge {
-  background: #eee;
-  padding: 3px 8px;
+/* 註釋編號輸入框 */
+.note-number-input {
+  width: 50px;
+  text-align: center;
+  padding: 5px;
+  border: 1px solid #ddd;
   border-radius: 4px;
-  font-size: 0.9rem;
   font-weight: bold;
+  background-color: #eee;
 }
+.note-number-input:focus {
+  background-color: white;
+  border-color: #007bff;
+}
+
 .btn-mini-add {
   background: #e7f1ff;
   border: none;
@@ -956,6 +1026,8 @@ select {
   background: none;
   color: #ccc;
   cursor: pointer;
+  width: 24px;
+  height: 24px;
 }
 .btn-icon-del:hover {
   color: red;

@@ -3,10 +3,13 @@ import { ref, computed, watch, onMounted } from "vue";
 import { useRoute } from "vue-router";
 import MainLayout from "../components/MainLayout.vue";
 import { supabase } from "../supabase";
+// ⭐ 補上這裡
+import { useEditorMode } from "../composables/useEditorMode";
 
 const route = useRoute();
 const loading = ref(true);
 const currentTheme = ref(null);
+const { isEditor } = useEditorMode();
 
 // 核心函式：根據網址決定要抓哪一期
 const fetchThemeData = async () => {
@@ -26,6 +29,11 @@ const fetchThemeData = async () => {
       query = query.not("cfp_title", "is", null).order("id", { ascending: false }).limit(1);
     }
 
+    // ⭐ 關鍵邏輯：前台只能看到已發布的徵稿主題
+    if (!isEditor.value) {
+      query = query.eq("is_published", true);
+    }
+
     const { data, error } = await query;
 
     if (error) throw error;
@@ -40,7 +48,6 @@ const fetchThemeData = async () => {
   }
 };
 
-// 輔助：將資料庫文章依換行符號切割成陣列，確保每一段都能正確縮排
 const themeParagraphs = computed(() => {
   if (!currentTheme.value || !currentTheme.value.cfp_theme) return [];
   // 濾掉純空白行
@@ -53,6 +60,11 @@ watch(
     fetchThemeData();
   }
 );
+
+// ⭐ 監聽模式：切換時重新抓取
+watch(isEditor, () => {
+  fetchThemeData();
+});
 
 onMounted(() => {
   document.title = "投稿資訊 - 無境界者雜誌";
@@ -79,7 +91,10 @@ onMounted(() => {
     <div v-else-if="!currentTheme" class="status-msg">目前尚無徵稿資訊。</div>
 
     <section id="theme" v-else>
-      <h3>☆下期徵稿主題</h3>
+      <h3>
+        ☆下期徵稿主題
+        <span v-if="isEditor" style="font-size: 0.6em; color: #999">(預覽模式)</span>
+      </h3>
       <div class="theme-block">
         <h2 class="theme-title">徵稿主題：《{{ currentTheme.cfp_title }}》</h2>
 
@@ -205,9 +220,8 @@ onMounted(() => {
 <style scoped>
 @import "@/assets/base.css";
 
-/* ==========================
-  全域設定：強制縮排 2rem
-========================== */
+/* ... (通用設定保持不變) ... */
+
 p {
   text-indent: 2rem;
   line-height: 1.8;
@@ -215,16 +229,10 @@ p {
   margin-bottom: 1rem;
   text-align: justify;
 }
-
-/* 特例：不縮排的文字 */
 .no-indent,
 .deadline {
   text-indent: 0 !important;
 }
-
-/* ==========================
-  標題樣式
-========================== */
 .main-divider {
   width: 100%;
   height: 4px;
@@ -232,13 +240,11 @@ p {
   border-radius: 2px;
   margin: 20px auto;
 }
-
 h2 {
   text-align: center;
   color: #444;
   margin: 1rem 0;
 }
-
 h3 {
   text-align: left;
   text-indent: 0;
@@ -249,41 +255,28 @@ h3 {
   font-size: 1.5rem;
 }
 
-/* ==========================
-  徵稿主題 & 投稿類型 共用容器 
-========================== */
+/* ⭐ 修改 1：徵稿主題外框 (加大間距) */
 .theme-block {
   background-color: rgba(255, 255, 255, 0.6);
   border: 1px solid #ccc;
   border-radius: 10px;
-  padding: 20px;
+  /* 上下 30px，左右 60px (原本是 20px 30px) */
+  padding: 30px 60px;
   margin-bottom: 2rem;
 }
 
-/* 徵稿主題內容 */
-.theme-date {
-  color: #666;
-  font-weight: normal;
-  margin-bottom: 5px;
-  text-align: left;
-}
-
-/* ⭐ 修改點：徵稿主題標題樣式 (標楷體) */
 .theme-title {
   text-align: center;
-  font-size: 1.8rem; /* 稍微加大 */
+  font-size: 1.8rem;
   font-weight: bold;
-  margin-bottom: 1rem;
+  margin-bottom: 1.5rem;
   color: #333;
-  /* 設定標楷體，並提供備選字型 */
   font-family: "KaiTi", "BiauKai", "DFKai-SB", "TW-Kai", serif;
 }
-
 .theme-image {
   text-align: center;
-  margin-bottom: 1rem;
+  margin-bottom: 1.5rem;
 }
-
 .theme-image img {
   max-width: 100%;
   height: auto;
@@ -296,17 +289,15 @@ h3 {
 .deadline {
   text-align: right;
   font-weight: bold;
-  margin-top: 1rem;
+  margin-top: 2rem;
+  margin-right: 10px;
 }
 
-/* ==========================
-  投稿類型列表
-========================== */
+/* ⭐ 修改 3：投稿類型列表 (增加每列高度) */
 .type-item {
   display: flex;
   align-items: center;
-  margin-bottom: 20px;
-  padding-bottom: 10px;
+  padding: 15px 0; /* 上下增加間距，讓列變高 */
   border-bottom: 1px dashed #eee;
 }
 
@@ -328,7 +319,6 @@ h3 {
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
   font-size: 0.95rem;
 }
-
 .type-description {
   margin: 0;
   color: #555;
@@ -337,7 +327,7 @@ h3 {
   text-indent: 0 !important;
 }
 
-/* 顏色分類 */
+/* 顏色區塊 */
 .type-block.red {
   background-color: #8b0000;
 }
@@ -366,9 +356,6 @@ h3 {
   background-color: #db7093;
 }
 
-/* ==========================
-  連結樣式
-========================== */
 a {
   color: #0275d8;
   text-decoration: none;
@@ -376,26 +363,18 @@ a {
 a:hover {
   text-decoration: underline;
 }
-
-/* ==========================
-  投稿按鈕區
-========================== */
 #submit {
   text-align: center;
   padding: 20px 0;
   margin-top: -1rem;
 }
-
 #submit h2 {
   text-align: center;
 }
-
-/* ⭐ 修改點：強制這個區塊的 p 置中 */
 #submit p {
   text-align: center !important;
   text-indent: 0 !important;
 }
-
 .submit-button {
   display: inline-block;
   padding: 15px 60px;
@@ -409,13 +388,11 @@ a:hover {
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
   margin-top: 1rem;
 }
-
 .submit-button:hover {
   background-color: #4cae4c;
   transform: translateY(-3px);
   text-decoration: none;
 }
-
 .status-msg {
   text-align: center;
   padding: 20px;
@@ -424,15 +401,20 @@ a:hover {
   text-indent: 0 !important;
 }
 
-/* ==========================
-  RWD 適配
-========================== */
+/* RWD 手機版調整 */
 @media (max-width: 768px) {
+  .theme-block {
+    padding: 20px 20px; /* 手機版不需要那麼寬的邊距，避免內容太窄 */
+  }
+  .theme-description {
+    margin: 0; /* 手機版取消額外內縮 */
+  }
+
   .type-item {
     flex-direction: column;
     align-items: flex-start;
+    padding: 20px 0;
   }
-
   .type-block {
     margin-bottom: 10px;
   }

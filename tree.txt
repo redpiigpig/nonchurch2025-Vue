@@ -19,9 +19,9 @@ magazine-web/
 │   ├── images/ (omitted)
 │   └── magazines/ (omitted)
 └── src/
-    ├── App.vue
-    ├── main.js
-    ├── supabase.js
+    ├── `App.vue`
+    ├── `main.js`
+    ├── `supabase.js`
     ├── assets/
     │   ├── `article.css`
     │   └── `base.css`

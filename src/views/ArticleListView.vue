@@ -1,11 +1,13 @@
 <script setup>
-import { ref, computed, onMounted } from "vue";
-import { useRoute } from "vue-router";
+import { ref, computed, onMounted, watch } from "vue";
+import { useRoute, useRouter } from "vue-router"; // ⭐ 1. 引入 Router
 import { supabase } from "../supabase";
 import { useEditorMode } from "../composables/useEditorMode";
 import MainLayout from "../components/MainLayout.vue";
 
 const { isEditor } = useEditorMode();
+const route = useRoute(); // ⭐ 建立實例
+const router = useRouter();
 
 const selectedYear = ref(2025);
 const yearOptions = [
@@ -16,13 +18,10 @@ const yearOptions = [
 const groupedIssues = ref([]);
 const loading = ref(true);
 
-// 🛠️ 輔助工具：更強的 ID 解析 (支援 "1-07" 也可以支援純數字 "07")
 const extractOrderFromId = (idStr) => {
   if (!idStr) return 0;
-  // 嘗試抓取橫線後面的數字
   const match = idStr.match(/-(\d+)/);
   if (match) return parseInt(match[1]);
-  // 如果沒有橫線，嘗試直接轉數字
   const num = parseInt(idStr);
   return isNaN(num) ? 0 : num;
 };
@@ -32,7 +31,6 @@ const formatDisplayId = (num) => (num ? num.toString().padStart(2, "0") : "");
 const fetchAndGroupArticles = async () => {
   loading.value = true;
 
-  // 1. 查詢 issues 表格，並聯集查詢底下的 articles
   let query = supabase
     .from("issues")
     .select(
@@ -57,9 +55,8 @@ const fetchAndGroupArticles = async () => {
     return;
   }
 
-  // 2. 資料整理邏輯
   groupedIssues.value = issuesData.map((issue) => {
-    // 網址自動補全
+    // ... (這段圖片與文章整理邏輯保持不變) ...
     const storageBase = "https://pottupypvdzamztdhsah.supabase.co/storage/v1/object/public/images";
     const defaultCover = `${storageBase}/covers/cover-${issue.id}.png`;
     const defaultPdf = `${storageBase}/magazines/Vol.${issue.id}.pdf`;
@@ -83,21 +80,15 @@ const fetchAndGroupArticles = async () => {
         if (art.author_display) art.author = art.author_display;
       });
 
-      // 🔥 1. 確保排序絕對正確
       issue.content.sort((a, b) => a._sortOrder - b._sortOrder);
 
-      // 🔥 2.【去重複標題邏輯 - 加強版】
       let lastSection = null;
       issue.content.forEach((art) => {
-        // 使用 trim() 去除前後空白，避免 "主題廣場" 和 "主題廣場 " 被當成不同
         const currentSection = art.section ? art.section.trim() : null;
-
         if (currentSection) {
           if (currentSection === lastSection) {
-            // 跟上一篇一樣 -> 隱藏
             art.showSectionHeader = false;
           } else {
-            // 是新的區塊 -> 顯示
             art.showSectionHeader = true;
             lastSection = currentSection;
           }
@@ -106,19 +97,16 @@ const fetchAndGroupArticles = async () => {
         }
       });
 
-      // 插入結尾項目
       let maxId = 0;
       if (issue.content.length > 0) {
         maxId = issue.content[issue.content.length - 1]._sortOrder;
       }
-
       issue.content.push({
         display_id: formatDisplayId(maxId + 1),
         title: "投稿資訊／下期主題",
         type: "text-only",
         is_footer_start: true,
       });
-
       issue.content.push({
         display_id: formatDisplayId(maxId + 2),
         title: "編輯資訊／線上資訊",
@@ -132,7 +120,15 @@ const fetchAndGroupArticles = async () => {
     return issue;
   });
 
-  if (groupedIssues.value.length > 0) {
+  // ⭐ 修改點：決定 selectedYear 的邏輯
+  const queryYear = parseInt(route.query.year);
+  const isQueryValid = yearOptions.some((opt) => opt.value === queryYear);
+
+  if (isQueryValid) {
+    // 1. 如果網址有有效參數，優先使用
+    selectedYear.value = queryYear;
+  } else if (groupedIssues.value.length > 0) {
+    // 2. 否則，自動選取最新一期所在的年份
     const latestIssue = groupedIssues.value[0];
     const latestYear = 2025 + Math.floor((latestIssue.id - 1) / 6);
     if (yearOptions.some((opt) => opt.value === latestYear)) {
@@ -166,11 +162,19 @@ const filteredIssues = computed(() => {
   });
 });
 
+// ⭐ 監聽年份切換 -> 更新網址
+watch(selectedYear, (newVal) => {
+  router.replace({ query: { ...route.query, year: newVal } });
+});
+
+watch(isEditor, () => {
+  fetchAndGroupArticles();
+});
+
 onMounted(() => {
   document.title = "文章列表 - 無境界者雜誌";
   fetchAndGroupArticles();
 
-  const route = useRoute();
   if (route.hash) {
     setTimeout(() => {
       const target = document.querySelector(route.hash);
@@ -214,7 +218,7 @@ onMounted(() => {
         <h2 :id="`issue-${issue.id}`">
           <span>　　</span>第 {{ issue.id }} 期《{{ issue.title }}》
           <span class="issue-date">／{{ issue.date }}</span>
-          <span v-if="issue.isDraft" class="draft-badge"> (草稿) </span>
+          <span v-if="issue.isDraft" class="draft-badge"> (期數草稿) </span>
         </h2>
 
         <div class="content-wrapper">
@@ -249,6 +253,13 @@ onMounted(() => {
                   <router-link v-if="item.type !== 'text-only'" :to="`/articles/${item.routeId}`">
                     {{ item.title }}
                     <span v-if="item.subtitle">──{{ item.subtitle }}</span>
+
+                    <span
+                      v-if="isEditor && !item.is_published"
+                      style="color: red; font-size: 0.8em; font-weight: bold; margin-left: 5px"
+                    >
+                      (草稿)
+                    </span>
                   </router-link>
 
                   <span v-else>
@@ -278,7 +289,7 @@ onMounted(() => {
 
 <style scoped>
 @import "@/assets/base.css";
-
+/* 樣式保持不變 */
 h2 {
   text-align: left;
   color: #444;
@@ -302,7 +313,6 @@ h2 {
   vertical-align: middle;
   font-weight: normal;
 }
-
 .content-wrapper {
   display: flex;
   justify-content: space-between;
@@ -342,7 +352,6 @@ li {
   text-decoration: none;
   transition: color 0.3s ease;
 }
-
 .left-section li p {
   margin: 0;
   padding-left: 2rem;
@@ -379,14 +388,12 @@ li {
   border-radius: 2px;
   margin: 20px auto;
 }
-
 .title-box {
   text-align: center;
   margin: 1rem 0;
   position: relative;
   min-height: 1px;
 }
-
 .title-box::before {
   content: "";
   position: absolute;
@@ -398,7 +405,6 @@ li {
   transform: none;
   margin-top: 0.2em;
 }
-
 .title-box h3 {
   text-align: center !important;
   display: inline-block;
@@ -408,7 +414,6 @@ li {
   position: relative;
   color: #444;
 }
-
 @media (max-width: 768px) {
   .content-wrapper {
     flex-direction: column;

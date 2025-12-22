@@ -1,11 +1,13 @@
 <script setup>
 import { ref, watch, onMounted } from "vue";
+import { useRoute, useRouter } from "vue-router"; // ⭐ 1. 引入 Router
 import MainLayout from "../components/MainLayout.vue";
 import { supabase } from "../supabase";
-// 1. 引入編輯模式判斷
 import { useEditorMode } from "../composables/useEditorMode";
 
 const { isEditor } = useEditorMode();
+const route = useRoute(); // ⭐ 建立 route 實例
+const useRouterInstance = useRouter(); // ⭐ 建立 router 實例
 
 const selectedYear = ref(2025);
 const yearOptions = [
@@ -13,21 +15,24 @@ const yearOptions = [
   { value: 2025, label: "2025 年專欄作者" },
 ];
 
-// 用來存從資料庫抓回來的所有原始資料
 const allAuthors = ref([]);
-// 用來存過濾並隨機排序後的顯示資料
 const randomizedAuthors = ref([]);
-const isLoading = ref(true); // 增加一個讀取狀態
+const isLoading = ref(true);
 
-// 從 Supabase 抓取資料
+// 初始化年份 (優先讀取網址參數)
+const initYear = () => {
+  const queryYear = parseInt(route.query.year);
+  // 檢查網址上的年份是否有效
+  if (yearOptions.some((opt) => opt.value === queryYear)) {
+    selectedYear.value = queryYear;
+  }
+};
+
 const fetchAuthors = async () => {
   try {
     isLoading.value = true;
-
-    // 2. 建立查詢
     let query = supabase.from("authors").select("*").order("id", { ascending: true });
 
-    // 3. 關鍵邏輯：如果「不是」編輯模式，就只抓「已發布」的
     if (!isEditor.value) {
       query = query.eq("is_published", true);
     }
@@ -38,7 +43,6 @@ const fetchAuthors = async () => {
 
     if (data) {
       allAuthors.value = data;
-      // 資料抓回來後，立刻執行一次過濾與排序
       updateAuthors();
     }
   } catch (error) {
@@ -49,32 +53,28 @@ const fetchAuthors = async () => {
 };
 
 const updateAuthors = () => {
-  // 改為從 allAuthors (資料庫資料) 進行過濾
-  // 資料庫的 years 欄位是陣列 (integer[])，JS 裡直接用 includes 即可
   const filtered = allAuthors.value.filter((a) => a.years && a.years.includes(selectedYear.value));
-
   const newArr = [...filtered];
-  // 洗牌演算法 (Fisher-Yates Shuffle)
   for (let i = newArr.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [newArr[i], newArr[j]] = [newArr[j], newArr[i]];
   }
-
   randomizedAuthors.value = newArr;
 };
 
-watch(selectedYear, () => {
+// 監聽年份改變 -> 更新網址 & 更新列表
+watch(selectedYear, (newVal) => {
+  useRouterInstance.replace({ query: { ...route.query, year: newVal } }); // ⭐ 更新網址
   updateAuthors();
 });
 
-// 4. 監聽模式變化 (例如登入/登出)，即時重新抓取資料
 watch(isEditor, () => {
   fetchAuthors();
 });
 
 onMounted(() => {
   document.title = "專欄作者 - 無境界者雜誌";
-  // 啟動抓取資料
+  initYear(); // ⭐ 初始化年份
   fetchAuthors();
 });
 </script>
@@ -137,45 +137,35 @@ onMounted(() => {
 <style scoped>
 @import "@/assets/base.css";
 
-/* 增加一個簡單的 Loading 樣式 */
 .loading-state {
   text-align: center;
   font-size: 1.2rem;
   color: #666;
   margin: 40px 0;
 }
-
 .authors-list {
   max-width: 1100px;
   margin: 0 auto;
 }
-
 .author-box {
   display: flex;
   align-items: center;
   justify-content: space-between;
   margin: 20px auto;
   padding: 30px;
-
   background-color: rgba(255, 255, 255, 0.6);
   border: 1px solid rgba(255, 255, 255, 0.8);
   border-radius: 10px;
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
-
   max-width: 900px;
   transition: transform 0.3s ease, box-shadow 0.3s ease;
-
-  /* 6. 為了定位隱藏標籤，這裡要加上 relative */
   position: relative;
 }
-
 .author-box:hover {
   transform: translateY(-3px);
   box-shadow: 0 6px 12px rgba(0, 0, 0, 0.1);
   background-color: rgba(255, 255, 255, 0.9);
 }
-
-/* 7. 隱藏狀態標籤 (僅後台可見) */
 .draft-badge {
   position: absolute;
   top: 10px;
@@ -187,13 +177,11 @@ onMounted(() => {
   font-size: 0.8rem;
   z-index: 10;
 }
-
 .author-info {
   display: flex;
   align-items: center;
   flex-shrink: 0;
 }
-
 .author-image {
   width: 160px;
   height: 160px;
@@ -204,7 +192,6 @@ onMounted(() => {
   background-position: center;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
-
 .author-info h2 {
   font-size: 1.5rem;
   margin: 0;
@@ -214,7 +201,6 @@ onMounted(() => {
   font-family: "Times New Roman", serif;
   white-space: nowrap;
 }
-
 .author-bio {
   flex: 1;
   text-align: left;
@@ -222,7 +208,6 @@ onMounted(() => {
   padding-bottom: 25px;
   min-height: 80px;
 }
-
 .author-bio p {
   margin: 0 0 10px;
   color: #555;
@@ -232,7 +217,6 @@ onMounted(() => {
   text-align: justify;
   white-space: pre-line;
 }
-
 .read-more-btn {
   position: absolute;
   bottom: -5px;
@@ -243,12 +227,10 @@ onMounted(() => {
   font-family: "Times New Roman", serif;
   transition: color 0.3s;
 }
-
 .read-more-btn:hover {
   color: #2e7d32;
   text-decoration: underline;
 }
-
 @media (max-width: 768px) {
   .author-box {
     flex-direction: column;
@@ -256,7 +238,6 @@ onMounted(() => {
     text-align: center;
     padding: 20px;
   }
-
   .author-info {
     flex-direction: column;
     align-items: center;
@@ -265,27 +246,23 @@ onMounted(() => {
     border-bottom: 1px dashed #ccc;
     padding-bottom: 1rem;
   }
-
   .author-image {
     width: 160px;
     height: 160px;
     margin-right: 0;
     margin-bottom: 10px;
   }
-
   .author-info h2 {
     padding-right: 0;
     font-size: 1.6rem;
     white-space: normal;
   }
-
   .author-bio {
     width: 100%;
     text-align: left;
     padding-bottom: 0;
     min-height: auto;
   }
-
   .read-more-btn {
     position: static;
     display: block;

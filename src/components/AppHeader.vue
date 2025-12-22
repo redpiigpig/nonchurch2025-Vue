@@ -5,47 +5,37 @@ import { useEditorMode } from "../composables/useEditorMode";
 
 const route = useRoute();
 const { isEditor } = useEditorMode();
-
-const getLink = (path) => {
-  // 如果目前是「編輯模式」，就要把目標路徑改成後台路徑
-  if (isEditMode.value) {
-    // 例如：前台是 /home，後台要對應到 /admin/home
-    // (你的 Router 設定裡，後台的 home 是在 children: [ { path: 'home' } ] )
-    return `/admin${path}`;
-  }
-
-  // 如果是前台，就維持原樣
-  return path;
-};
 const isEditMode = computed(() => isEditor.value);
 
-// ⭐ 核心修正：聰明的鏡像路徑切換
+// 導覽列連結生成器：前台維持原樣，後台加 /admin
+const getLink = (path) => {
+  if (isEditMode.value) {
+    return `/admin${path}`;
+  }
+  return path;
+};
+
+// ⭐ 鏡像切換按鈕邏輯 (保持您原本的邏輯)
 const editLink = computed(() => {
   const currentPath = route.path;
 
-  // 情況 A：如果正在看某篇文章，按筆要進入「文章編輯器」
+  // A. 文章詳情 -> 編輯器
   if (!isEditMode.value && route.name === "article-detail" && route.params.id) {
     return `/admin/editor/${route.params.id}`;
   }
-
-  // 情況 B：如果在編輯器裡面，按地球要回到「文章前台」
+  // B. 編輯器 -> 文章詳情
   if (
     isEditMode.value &&
     (route.name === "admin-editor-edit" || route.name === "admin-editor-new")
   ) {
-    // 如果有 id 就回該文章，沒 id 就回列表
     return route.params.id ? `/articles/${route.params.id}` : "/articles";
   }
 
-  // 情況 C：一般頁面鏡像切換 (Mission -> Admin Mission)
+  // C. 一般頁面切換 (/mission <-> /admin/mission)
   if (isEditMode.value) {
-    // 後台 -> 前台：把 /admin 去掉
-    // 例如 /admin/mission -> /mission
     return currentPath.replace(/^\/admin/, "") || "/home";
   } else {
-    // 前台 -> 後台：加上 /admin
-    // 例如 /mission -> /admin/mission
-    // 根目錄特例處理
+    // 如果在首頁，要去的後台對應頁是 /admin/home (鏡像首頁)，不是 /admin (管理後台)
     return currentPath === "/" ? "/admin/home" : `/admin${currentPath}`;
   }
 });
@@ -55,7 +45,7 @@ const editLink = computed(() => {
   <header :class="['header', { 'editor-header': isEditMode }]">
     <nav class="nav">
       <div class="logo">
-        <RouterLink :to="isEditMode ? '/admin' : '/home'">
+        <RouterLink :to="isEditMode ? '/admin/home' : '/home'">
           <img src="/images/system/封面Logo.png" alt="Logo" class="logo-icon" />
           <img src="/images/system/封面題字.png" alt="無境界者" class="logo-text" />
           <span v-if="isEditMode" class="editor-badge">編輯模式</span>
@@ -85,35 +75,29 @@ const editLink = computed(() => {
 </template>
 
 <style scoped>
+/* 樣式保持不變，直接沿用您原本的即可 */
 *,
 *::before,
 *::after {
   box-sizing: border-box;
 }
-
 .header {
   background: linear-gradient(135deg, rgba(76, 175, 80, 0.95), rgba(129, 199, 132, 0.95));
   height: 120px;
   width: 100%;
   padding: 0 20px;
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-
-  /* ⭐ 關鍵修改：改為 sticky 讓它黏在頂端 */
   position: sticky;
   top: 0;
-  z-index: 1000; /* 確保它在最上層 */
-
+  z-index: 1000;
   transition: all 0.3s ease;
   font-size: 20px;
   display: flex;
   align-items: center;
 }
-
-/* 編輯模式 Header 變色 */
 .header.editor-header {
   background: linear-gradient(135deg, #2c3e50, #4ca1af);
 }
-
 .nav {
   display: flex;
   justify-content: space-between;
@@ -122,27 +106,23 @@ const editLink = computed(() => {
   width: 100%;
   margin: 0 auto;
 }
-
 .logo {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 10px;
 }
-
 .logo-icon {
   width: 70px;
   height: 70px;
   object-fit: contain;
   margin-right: -20px;
 }
-
 .logo-text {
   width: 200px;
   height: 60px;
   object-fit: contain;
 }
-
 .editor-badge {
   color: #f1c40f;
   font-weight: bold;
@@ -154,12 +134,10 @@ const editLink = computed(() => {
   align-self: start;
   margin-top: 10px;
 }
-
 .menu {
   display: flex;
   gap: 20px;
 }
-
 .menu a {
   text-decoration: none;
   color: white;
@@ -167,16 +145,13 @@ const editLink = computed(() => {
   transition: all 0.3s ease;
   border-radius: 5px;
 }
-
 .menu a:hover {
   color: #1b5e20;
 }
-
 .admin-link {
   background-color: rgba(255, 255, 255, 0.2);
   font-weight: bold;
 }
-
 .header-edit-btn {
   position: absolute;
   top: 50%;
@@ -195,42 +170,31 @@ const editLink = computed(() => {
   transition: all 0.3s ease;
   z-index: 100;
 }
-
 .header-edit-btn:hover {
   background-color: #007bff;
   transform: translateY(-50%) scale(1.1);
 }
-
-/* ==========================
-   RWD 手機版
-========================== */
 @media (max-width: 1024px) {
   .menu {
     gap: 10px;
   }
 }
-
 @media (max-width: 768px) {
   .header {
     height: auto;
     padding: 10px 15px;
     font-size: 16px;
     display: block;
-
-    /* 手機版依然保持 sticky，會很好用 */
     position: sticky;
     top: 0;
   }
-
   .nav {
     flex-direction: column;
     align-items: flex-start;
   }
-
   .logo {
     margin-bottom: 5px;
   }
-
   .logo-icon {
     width: 50px;
     height: 50px;
@@ -240,7 +204,6 @@ const editLink = computed(() => {
     width: 140px;
     height: 45px;
   }
-
   .menu {
     display: flex;
     flex-wrap: nowrap;
@@ -252,11 +215,9 @@ const editLink = computed(() => {
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
   }
-
   .menu::-webkit-scrollbar {
     display: none;
   }
-
   .menu a {
     flex: 0 0 auto;
     padding: 6px 10px;
@@ -264,9 +225,8 @@ const editLink = computed(() => {
     border-radius: 15px;
     font-size: 0.95rem;
   }
-
   .header-edit-btn {
-    display: none;
+    top: 30%;
   }
 }
 </style>

@@ -8,9 +8,8 @@ import { authors } from "../data/authors.js";
 
 const route = useRoute();
 const router = useRouter();
-const { isEditor } = useEditorMode();
+const { isEditor } = useEditorMode(); // 1. 引入模式
 
-// --- 資料變數 ---
 const issuesList = ref([]);
 const currentIssueData = ref(null);
 const currentIssueContent = ref([]);
@@ -18,25 +17,19 @@ const articleSummaries = ref({});
 const hotKeywords = ref([]);
 const loading = ref(true);
 
-// --- 搜尋變數 ---
 const searchQuery = ref("");
 const searchType = ref("title");
 const emailTooltip = ref("點擊複製 Email");
 
-// --- 修正：增強版關鍵字抓取 ---
 const extractCurrentKeywords = () => {
   if (!currentIssueContent.value.length) return;
-
   const allKeywords = currentIssueContent.value
     .map((a) => a.keyword)
     .filter((k) => k)
     .join("、")
     .split("、")
-    .map((k) => {
-      return k.replace("🌿", "").replace("關鍵字：", "").replace("關鍵字:", "").trim();
-    })
+    .map((k) => k.replace("🌿", "").replace("關鍵字：", "").replace("關鍵字:", "").trim())
     .filter((k) => k && k.length > 0);
-
   const uniqueKeywords = [...new Set(allKeywords)];
   const shuffled = uniqueKeywords.sort(() => 0.5 - Math.random());
   hotKeywords.value = shuffled.slice(0, 5);
@@ -47,6 +40,7 @@ const fetchIssues = async () => {
   loading.value = true;
   let query = supabase.from("issues").select("*").order("id", { ascending: false });
 
+  // ⭐ 邏輯修正：前台不顯示未發布期數
   if (!isEditor.value) {
     query = query.eq("is_published", true);
   }
@@ -74,11 +68,19 @@ const loadTargetIssue = async () => {
   currentIssueData.value = target;
 
   if (target) {
-    const { data: articles, error } = await supabase
+    // 建立查詢
+    let artQuery = supabase
       .from("articles")
       .select("*")
       .eq("issue", target.id)
       .order("id", { ascending: true });
+
+    // ⭐ 關鍵修正：確保前台不會撈到該期裡面的草稿文章
+    if (!isEditor.value) {
+      artQuery = artQuery.eq("is_published", true);
+    }
+
+    const { data: articles, error } = await artQuery;
 
     if (!error) {
       currentIssueContent.value = articles.map((a) => ({
@@ -102,7 +104,6 @@ const fetchSummaries = async (contentList) => {
   if (!contentList) return;
   const ids = contentList.filter((item) => item.routeId).map((item) => item.routeId);
   if (ids.length === 0) return;
-
   try {
     const { data, error } = await supabase.from("articles").select("id, summary").in("id", ids);
     if (!error && data) {
@@ -115,7 +116,6 @@ const fetchSummaries = async (contentList) => {
   }
 };
 
-// --- 3. 輔助函式 ---
 const getCategoryColor = (category) => {
   const map = {
     專題文章: "#8b0000",
@@ -142,7 +142,6 @@ const getColorClass = (colorCode) => {
   return map[colorCode] || "red";
 };
 
-// --- 4. Computed 資料 ---
 const currentIssue = computed(() => {
   if (!currentIssueData.value) return null;
   return {
@@ -153,7 +152,6 @@ const currentIssue = computed(() => {
     introHome: currentIssueData.value.intro_home,
     introCfp: currentIssueData.value.intro_cfp,
     pdfLink: currentIssueData.value.pdf_link,
-    // ⭐ 新增：讀取資料庫的 author_order 欄位
     authorOrder: currentIssueData.value.author_order,
     content: currentIssueContent.value,
   };
@@ -173,46 +171,29 @@ const specialFeatures = computed(() => groupArticles("特稿專區"));
 const themePlaza = computed(() => groupArticles("主題廣場"));
 const diverseLectures = computed(() => groupArticles("多元講堂"));
 
-// ⭐ 核心修正：依照資料庫的設定進行排序
 const currentIssueAuthors = computed(() => {
   if (!currentIssue.value) return [];
   if (!authors) return [];
-
-  // A. 找出本期文章出現的所有作者 (Set 去重複)
   const appearingNames = [...new Set(currentIssue.value.content.map((a) => a.author))];
-
-  // B. 篩選出這些作者的詳細資料 (這裡還是用 authors.js，之後可改用資料庫)
   let filteredAuthors = authors.filter((a) =>
     appearingNames.some((name) => name && name.includes(a.name))
   );
-
-  // C. 取得資料庫傳來的排序清單
   const orderList = currentIssue.value.authorOrder;
-
-  // D. 依照清單排序
   if (orderList && Array.isArray(orderList)) {
     filteredAuthors.sort((a, b) => {
       const indexA = orderList.indexOf(a.name);
       const indexB = orderList.indexOf(b.name);
-
-      // 兩者都在清單內：小的在前
       if (indexA !== -1 && indexB !== -1) return indexA - indexB;
-      // 只有 A 在清單內：A 排前面
       if (indexA !== -1) return -1;
-      // 只有 B 在清單內：B 排前面
       if (indexB !== -1) return 1;
-      // 都不在清單內：照 ID 排 (Fallback)
       return a.id - b.id;
     });
   } else {
-    // 若該期沒有設定排序，預設照 ID
     filteredAuthors.sort((a, b) => a.id - b.id);
   }
-
   return filteredAuthors;
 });
 
-// --- 5. 功能函式 ---
 const handleSearch = () => {
   if (searchQuery.value.trim()) {
     router.push({
@@ -235,6 +216,11 @@ watch(
   () => route.params.issueNumber,
   () => loadTargetIssue()
 );
+
+// ⭐ 監聽模式：切換時重新抓取期數列表與內容
+watch(isEditor, () => {
+  fetchIssues();
+});
 
 onMounted(() => {
   document.title = "無境界者雜誌";
@@ -259,6 +245,11 @@ onMounted(() => {
         <span class="emoji">🎉</span>
         {{ route.params.issueNumber ? `第 ${currentIssue?.number} 期回顧` : "當期雜誌" }}
         <span class="emoji">🎉</span>
+        <span
+          v-if="isEditor && !currentIssueData.is_published"
+          style="font-size: 0.6em; color: red; vertical-align: middle"
+          >(草稿期數)</span
+        >
       </h1>
 
       <section class="current-issue">
@@ -398,7 +389,6 @@ onMounted(() => {
       <section class="search">
         <h2><span class="construction-icon">🔍</span> 搜尋</h2>
         <br />
-
         <div class="search-links" v-if="hotKeywords.length > 0">
           <span style="font-weight: bold; color: #666; margin-right: 5px">本期關鍵字：</span>
           <a
@@ -415,7 +405,6 @@ onMounted(() => {
             #{{ tag }}
           </a>
         </div>
-
         <div class="search-box">
           <select v-model="searchType" class="search-select">
             <option value="title">搜尋文章標題</option>
@@ -474,7 +463,6 @@ onMounted(() => {
               />
             </svg>
           </a>
-
           <a
             href="#"
             @click.prevent="copyEmail"
