@@ -66,15 +66,14 @@ onMounted(() => {
 </template>
 
 <style scoped>
-/* 1. 引入統一的標題樣式 */
-@import "@/assets/base.css";
+@import "@/assets/shared.css";
 
 /* 段落通用設定 */
 p {
   line-height: 1.8;
   margin: 0.5rem;
   text-align: justify;
-  font-family: serif; /* 預設襯線體 */
+  font-family: serif;
   color: #444;
   font-size: 1.2rem;
 }

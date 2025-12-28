@@ -252,7 +252,7 @@ onMounted(() => {
 </template>
 
 <style scoped>
-@import "@/assets/base.css";
+@import "@/assets/shared.css";
 
 /* ⭐ 新增：後台工具列樣式 */
 .admin-toolbar {

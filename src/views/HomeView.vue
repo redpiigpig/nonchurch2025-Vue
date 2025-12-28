@@ -296,10 +296,9 @@ onMounted(() => {
             <router-link :to="`/articles#issue-${currentIssue?.number}`" class="title-link">
               第{{ currentIssue?.number }}期《{{ currentIssue?.title }}》
             </router-link>
-            <br />
             <span class="date">{{ currentIssue?.date }}</span>
           </h3>
-          <br />
+
           <p
             v-for="(paragraph, index) in (currentIssue?.introHome || '').split('\n')"
             :key="index"
@@ -307,7 +306,7 @@ onMounted(() => {
           >
             {{ paragraph }}
           </p>
-          <br />
+
           <div class="cover-story" v-if="coverStory">
             <span class="icon">📰</span>
             <router-link :to="`/articles/${coverStory.routeId}`">
@@ -409,7 +408,7 @@ onMounted(() => {
         <div class="call-for-submission">
           <h3>線上訂閱</h3>
           <p>
-            《無境界者》雜誌是一個不以教會為本位的自由信仰論述平台，歡迎讀者留下您的電子信箱訂閱本雜誌。
+            《無境界者》雜誌是一個不以教會為本位的自由信仰論述平台，亦是一個實驗性質的線上雜誌，會定期在雙數月月底發刊。歡迎讀者留下您的電子信箱訂閱本雜誌，每期發刊時，編輯室就會將當月的連結與PDF檔發送給您！
           </p>
           <a href="https://forms.gle/aWSBFRfQ74QY13nw8" target="_blank" class="btn">線上訂閱</a>
         </div>
@@ -637,6 +636,7 @@ h2 {
   font-weight: bold;
   margin-top: 5px;
   display: inline-block;
+  align-items: right;
 }
 
 .issue-desc {

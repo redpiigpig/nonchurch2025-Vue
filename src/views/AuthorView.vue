@@ -135,7 +135,7 @@ onMounted(() => {
 </template>
 
 <style scoped>
-@import "@/assets/base.css";
+@import "@/assets/shared.css";
 
 .loading-state {
   text-align: center;

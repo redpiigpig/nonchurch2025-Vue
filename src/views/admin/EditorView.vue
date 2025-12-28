@@ -441,7 +441,7 @@ const components = [
       <div class="header-right">
         <button class="btn-preview-page" @click="handlePreview">📑 預覽頁面</button>
         <button class="btn-save" @click="saveArticle" :disabled="loading">
-          {{ loading ? "處理中..." : "💾 發佈文章" }}
+          {{ loading ? "處理中..." : "💾 儲存文章" }}
         </button>
       </div>
     </header>
@@ -646,7 +646,7 @@ select {
   background-color: #f4f6f8;
   min-height: 100vh;
   padding-bottom: 60px;
-  width: 100%;
+  width: 1200px;
   overflow-x: hidden;
 }
 .editor-header {

@@ -288,7 +288,7 @@ onMounted(() => {
 </template>
 
 <style scoped>
-@import "@/assets/base.css";
+@import "@/assets/shared.css";
 /* 樣式保持不變 */
 h2 {
   text-align: left;

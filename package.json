@@ -8,6 +8,8 @@
   },
   "scripts": {
     "dev": "vite",
+    "tree:generate": "node scripts/generate-tree.js",
+    "tree:watch": "node scripts/generate-tree.js --watch",
     "build": "vite build",
     "preview": "vite preview",
     "lint:oxlint": "oxlint . --fix -D correctness --ignore-path .gitignore",
@@ -31,6 +33,7 @@
     "npm-run-all2": "^8.0.4",
     "oxlint": "~1.29.0",
     "vite": "^7.2.4",
-    "vite-plugin-vue-devtools": "^8.0.5"
+    "vite-plugin-vue-devtools": "^8.0.5",
+    "chokidar": "^3.5.3"
   }
 }

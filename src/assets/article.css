@@ -1,15 +1,10 @@
-/* ==========================================================================
-   Article CSS (Vue Refactored)
-   ========================================================================== */
+/* src/assets/article.css */
 
 /* --------------------------------------------------------------------------
    1. Base Typography & Layout
    -------------------------------------------------------------------------- */
 .markdown-body {
-  font-family: "Times New Roman", serif;
-  font-size: 1.2rem;
-  line-height: 1.8;
-  color: #333;
+  /* 字體、大小、行高、顏色皆已繼承 main.css，無需重複 */
   text-align: justify;
   word-wrap: break-word;
 }
@@ -19,12 +14,10 @@
   text-indent: 2em;
 }
 
-/* Utilities for Indentation */
 .markdown-body .no-indent {
   text-indent: 0 !important;
 }
 
-/* Strong & Links */
 .markdown-body strong {
   font-weight: bold;
 }
@@ -44,8 +37,7 @@
 .markdown-body h2,
 .markdown-body h3,
 .markdown-body h4 {
-  font-family: "Times New Roman", serif;
-  color: #333;
+  /* font-family 與 color 已繼承 */
   font-weight: bold;
   margin-top: 2.5rem;
   margin-bottom: 1rem;
@@ -78,7 +70,6 @@
   margin: 40px 0;
 }
 
-/* Custom Divider Component */
 .custom-divider {
   width: 100%;
   height: 2px;
@@ -92,6 +83,7 @@
 .keyword-section {
   margin: 3rem 0;
   font-weight: bold;
+  /* 保留標楷體設定 */
   font-family: "Times New Roman", "DFKai-SB", "標楷體", serif;
   font-size: 1.2rem;
   color: #333;
@@ -114,7 +106,7 @@
 .markdown-body sup a {
   text-decoration: none;
   color: #007bff;
-  font-family: "Times New Roman", serif;
+  /* font-family 已繼承 */
   padding: 0 3px;
   display: inline-block;
   text-indent: 0;
@@ -126,7 +118,6 @@
   text-decoration: underline;
 }
 
-/* RWD: Mobile Typography Adjustments */
 @media (max-width: 768px) {
   .markdown-body p {
     font-size: 1rem;
@@ -139,7 +130,7 @@
 /* Style 1: Inline Quote (em) */
 .markdown-body em {
   font-style: normal;
-  font-family: "DFKai-SB", "標楷體", serif;
+  font-family: "DFKai-SB", "標楷體", serif; /* 保留特殊字體 */
   color: #555;
 }
 
@@ -149,6 +140,7 @@
   border-left: 5px solid #8b4513;
   margin: 30px 2em 60px 2em;
   padding: 20px 30px;
+  /* 保留標楷體設定 */
   font-family: "Times New Roman", "DFKai-SB", "標楷體", serif;
   font-size: 1.2rem;
   line-height: 1.8;
@@ -163,6 +155,7 @@
   font-size: 1.2rem;
   margin-top: 1.5rem;
   color: #444;
+  /* 保留標楷體設定 */
   font-family: "Times New Roman", "DFKai-SB", "標楷體", serif;
   font-style: normal;
   font-weight: bold;
@@ -173,7 +166,7 @@
 .quote-box {
   margin: 3rem 0;
   padding: 0 2rem;
-  font-family: "DFKai-SB", "標楷體", serif;
+  font-family: "DFKai-SB", "標楷體", serif; /* 保留特殊字體 */
   font-size: 1.2rem;
   line-height: 1.8;
   color: #444;
@@ -192,6 +185,7 @@
   font-size: 1.2rem;
   margin-top: 10px;
   color: #444;
+  /* 保留標楷體設定 */
   font-family: "Times New Roman", "DFKai-SB", "標楷體", serif;
   font-style: normal;
 }
@@ -202,7 +196,7 @@
   font-size: 1rem;
   margin-top: 10px;
   color: #666;
-  font-family: "Times New Roman", sans-serif;
+  /* font-family 已繼承 Times New Roman */
   font-style: normal;
 }
 
@@ -220,6 +214,7 @@
 
 .book-info {
   flex: 2;
+  /* 保留標楷體設定 */
   font-family: "Times New Roman", "DFKai-SB", "標楷體", serif;
 }
 
@@ -233,9 +228,7 @@
   box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.2);
 }
 
-/* RWD: Quote Styles */
 @media (max-width: 768px) {
-  /* Book Box Mobile */
   .book-box {
     flex-direction: column;
     text-align: left;
@@ -245,8 +238,6 @@
   .book-image img {
     max-width: 200px;
   }
-
-  /* Quotes Mobile */
   .markdown-body blockquote,
   .quote-box {
     margin: 20px 10px;
@@ -305,7 +296,7 @@
   width: 2em;
   flex-shrink: 0;
   color: #007bff;
-  font-family: "Times New Roman", serif;
+  /* font-family 已繼承 */
   font-weight: normal;
   text-align: left;
 }
@@ -313,12 +304,11 @@
 .footnotes li p {
   margin: 0;
   text-indent: 0 !important;
-  font-family: "Times New Roman", serif;
+  /* font-family 已繼承 */
   color: #444;
   text-align: justify;
 }
 
-/* Return Arrow Hack */
 .footnotes li a:last-of-type {
   opacity: 0;
   position: absolute;
@@ -336,29 +326,27 @@
   cursor: pointer;
 }
 
-/* 1. 針對「標題區」和「作者區」的註釋強制重設樣式 */
 .footnote-ref a {
-  font-weight: normal !important; /* 【關鍵】強制細體，無視 H1 或 strong 的粗體繼承 */
+  font-weight: normal !important;
   text-decoration: none !important;
-  color: #007bff !important; /* 強制藍色 */
-  font-family: "Times New Roman", serif; /* 確保字型一致 */
+  color: #007bff !important;
+  /* font-family 已繼承 */
   cursor: pointer;
 }
 
 .title-header .footnote-ref,
 .author-info .footnote-ref {
-  font-size: 14px !important; /* 直接鎖死像素大小，避免被 H1 的 2.5rem 放大 */
-  font-weight: normal !important; /* 去除標題的粗體 */
+  font-size: 14px !important;
+  font-weight: normal !important;
   line-height: 1 !important;
   vertical-align: super !important;
   margin-left: 2px;
 }
 
-/* 2. 針對連結顏色的修正 */
 .title-header .footnote-ref a,
 .author-info .footnote-ref a {
   text-decoration: none !important;
-  color: #007bff !important; /* 強制藍色 */
+  color: #007bff !important;
   border-bottom: none !important;
   font-weight: normal !important;
 }
@@ -369,11 +357,10 @@
   text-decoration: underline !important;
 }
 
-/* 3. 特殊微調：因為 H1 主標題字真的很大，上標容易飛太高，這裡手動拉低一點 */
 .main-title .footnote-ref {
-  font-size: 16px !important; /* 標題旁稍微大一點點比較協調 */
+  font-size: 16px !important;
   position: relative;
-  top: -0.5rem !important; /* 往下壓一點，不要飛到天上去 */
+  top: -0.5rem !important;
 }
 
 .sub-title .footnote-ref {
@@ -382,7 +369,6 @@
   top: -0.3rem !important;
 }
 
-/* RWD: Footnotes */
 @media (max-width: 768px) {
   .footnotes {
     font-size: 0.85rem;
@@ -406,7 +392,7 @@
 }
 
 .markdown-body figcaption {
-  font-family: "Times New Roman", serif;
+  /* font-family 已繼承 */
   font-size: 0.95rem;
   color: #666;
   text-align: center;
@@ -414,7 +400,6 @@
   line-height: 1.4;
 }
 
-/* Position Utilities */
 .img-right {
   float: right;
   margin-left: 25px;
@@ -438,7 +423,6 @@
   clear: both;
 }
 
-/* Size Utilities */
 .px-150 {
   max-width: 150px;
 }
@@ -485,7 +469,6 @@
   width: 100%;
 }
 
-/* RWD: Image Layouts */
 @media (max-width: 768px) {
   .img-right,
   .img-left {
@@ -500,8 +483,6 @@
 /* --------------------------------------------------------------------------
    5. Specialized Components
    -------------------------------------------------------------------------- */
-
-/* Portrait Box Component */
 .portrait-box {
   float: right;
   clear: right;
@@ -533,7 +514,6 @@
   }
 }
 
-/* Reference Box Component */
 .reference-box {
   background-color: #f9f9f9;
   border-left: 5px solid #378b13;
@@ -541,6 +521,7 @@
   margin: 30px 6em;
   padding: 20px 30px;
   display: block;
+  /* 保留標楷體設定 */
   font-family: "Times New Roman", "DFKai-SB", "標楷體", serif;
   font-size: 1.15rem;
   color: #333;
@@ -590,7 +571,6 @@
   }
 }
 
-/* Special Box (Lyrics/Verses) */
 .special-box {
   border: 2px dashed #444;
   border-radius: 10px;
@@ -621,7 +601,7 @@
 }
 
 .special-box .meta {
-  font-family: "Times New Roman", serif;
+  /* font-family 已繼承 */
   font-size: 0.85rem;
   color: #666;
   margin-top: 0;
@@ -643,7 +623,7 @@
   width: 100%;
   border-collapse: collapse;
   margin: 0, 30px;
-  font-family: "Times New Roman", serif;
+  /* font-family 已繼承 */
   font-size: 1.2rem;
   table-layout: fixed;
 }
@@ -701,7 +681,6 @@
   font-size: 1.2rem;
 }
 
-/* RWD: Data Table */
 @media (max-width: 768px) {
   .data-table {
     font-size: 1rem;
@@ -710,7 +689,6 @@
   .data-table td {
     padding: 8px 5px;
   }
-  /* Specific Column Width Adjustments */
   col:nth-child(1) {
     width: 3rem !important;
   }
@@ -791,7 +769,6 @@
   transform: translateY(-2px);
 }
 
-/* RWD: Info Card */
 @media (max-width: 768px) {
   .info-card {
     float: none;
@@ -824,36 +801,31 @@
 }
 
 /* =========================================
-   8：主題圖片 (Theme Image)
+   8. 主題圖片 (Theme Image)
    ========================================= */
 .theme-image {
   text-align: center;
-  margin: 40px 0; /* 稍微加大間距比較好看 */
+  margin: 40px 0;
 }
 
 .theme-image img {
-  max-width: 650px; /* 確保手機版不破版 */
-  width: auto; /* 保持比例 */
+  max-width: 650px;
+  width: auto;
   height: auto;
   border-radius: 5px;
-
-  /* 您的設計樣式 */
   border: 1.5px solid #444;
   box-shadow: 0 0 0 1.5px white, 0 0 0 4.5px #444;
-
-  /* 為了不被原本的 img 樣式覆蓋，建議加這行 */
   margin: 0 auto;
 }
 
-/* RWD 手機版微調 */
 @media (max-width: 768px) {
   .theme-image img {
-    max-width: 90%; /* 手機版留點邊 */
+    max-width: 90%;
   }
 }
 
 /* ==========================
-         9：作者簡介
+   9. 作者簡介
   ========================== */
 .author-profile {
   display: flex;

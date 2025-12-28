@@ -46,8 +46,16 @@ const editLink = computed(() => {
     <nav class="nav">
       <div class="logo">
         <RouterLink :to="isEditMode ? '/admin/home' : '/home'">
-          <img src="/images/system/封面Logo.png" alt="Logo" class="logo-icon" />
-          <img src="/images/system/封面題字.png" alt="無境界者" class="logo-text" />
+          <img
+            src="https://pottupypvdzamztdhsah.supabase.co/storage/v1/object/public/images/system/Header_Logo.png"
+            alt="Logo"
+            class="logo-icon"
+          />
+          <img
+            src="https://pottupypvdzamztdhsah.supabase.co/storage/v1/object/public/images/system/Header_text.png"
+            alt="無境界者"
+            class="logo-text"
+          />
           <span v-if="isEditMode" class="editor-badge">編輯模式</span>
         </RouterLink>
       </div>
