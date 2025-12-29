@@ -19,6 +19,7 @@ const PublishingCenter = () => import("../views/admin/PublishingCenter.vue");
 const IssuesManager = () => import("../views/admin/IssuesManager.vue");
 const AuthorsManager = () => import("../views/admin/AuthorsManager.vue");
 const ArticlesManager = () => import("../views/admin/ArticlesManager.vue");
+const MediaManager = () => import("../views/admin/MediaManager.vue");
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -74,6 +75,8 @@ const router = createRouter({
             // 5. 新增/編輯文章 (Editor)
             { path: "editor", name: "admin-editor-new", component: EditorView },
             { path: "editor/:id", name: "admin-editor-edit", component: EditorView },
+
+            { path: "media_manager", name: "admin-media-manager", component: MediaManager },
           ],
         },
 
@@ -89,6 +92,7 @@ const router = createRouter({
         { path: "authors/:name", component: AuthorDetailView },
         { path: "submit", component: SubmissionView },
         { path: "submit/issue/:issueNumber", component: SubmissionView },
+        { path: "search", component: SearchView },
       ],
     },
 

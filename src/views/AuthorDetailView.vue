@@ -9,6 +9,12 @@ const author = ref(null);
 const authorArticles = ref([]);
 const loading = ref(true);
 
+const getArticleOrder = (id) => {
+  if (!id) return 0;
+  const match = id.match(/-(\d+)/);
+  return match ? parseInt(match[1]) : 0;
+};
+
 const fetchData = async () => {
   const authorName = route.params.name;
 
@@ -17,7 +23,6 @@ const fetchData = async () => {
   try {
     loading.value = true;
 
-    // 1. 抓取作者資料
     const { data: authorData, error: authorError } = await supabase
       .from("authors")
       .select("*")
@@ -29,7 +34,6 @@ const fetchData = async () => {
 
     document.title = `${authorData.name} - 無境界者雜誌`;
 
-    // 2. 抓取文章
     if (authorData) {
       const { data: articlesData, error: articlesError } = await supabase
         .from("articles")
@@ -40,6 +44,7 @@ const fetchData = async () => {
           subtitle,
           summary,
           author,
+          category,
           issue,
           issues (
             id,
@@ -48,11 +53,29 @@ const fetchData = async () => {
           )
         `
         )
-        .ilike("author", `%${authorData.name}%`)
-        .order("issue", { ascending: false });
+        // 條件：(作者是本人 OR 顯示作者是本人) AND (分類不是編輯室報告)
+        .or(`author.ilike.%${authorData.name}%,author_display.ilike.%${authorData.name}%`)
+        .neq("title", "編輯室報告");
 
       if (articlesError) throw articlesError;
-      authorArticles.value = articlesData || [];
+
+      // ⭐ 前端排序邏輯修正
+      const sortedData = (articlesData || []).sort((a, b) => {
+        const issueA = a.issue || 0;
+        const issueB = b.issue || 0;
+
+        // 1. 期數 (Issue)：由大到小 (6 -> 5)
+        if (issueA !== issueB) {
+          return issueB - issueA; // 修改這裡：B - A = Descending
+        }
+
+        // 2. 文章序號：由小到大 (1 -> 2)
+        const orderA = getArticleOrder(a.id);
+        const orderB = getArticleOrder(b.id);
+        return orderA - orderB; // 保持這裡：A - B = Ascending
+      });
+
+      authorArticles.value = sortedData;
     }
   } catch (error) {
     console.error("Error fetching author details:", error.message);

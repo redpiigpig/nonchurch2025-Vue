@@ -69,6 +69,23 @@ const editLink = computed(() => {
         <RouterLink :to="getLink('/authors')">專欄作者</RouterLink>
         <a href="https://forms.gle/aWSBFRfQ74QY13nw8" target="_blank">線上訂閱</a>
         <RouterLink :to="getLink('/submit')">投稿資訊</RouterLink>
+
+        <RouterLink :to="getLink('/search')" class="search-icon-btn" title="搜尋">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
+        </RouterLink>
       </div>
     </nav>
 
@@ -83,7 +100,6 @@ const editLink = computed(() => {
 </template>
 
 <style scoped>
-/* 樣式保持不變，直接沿用您原本的即可 */
 *,
 *::before,
 *::after {
@@ -103,9 +119,13 @@ const editLink = computed(() => {
   display: flex;
   align-items: center;
 }
+
+/* ⭐ 修改處：後台模式 (editor-header) 增加左側內距，將內容往右推 2rem */
 .header.editor-header {
   background: linear-gradient(135deg, #2c3e50, #4ca1af);
+  padding-left: calc(20px);
 }
+
 .nav {
   display: flex;
   justify-content: space-between;
@@ -114,6 +134,7 @@ const editLink = computed(() => {
   width: 100%;
   margin: 0 auto;
 }
+
 .logo {
   display: flex;
   align-items: center;
@@ -142,9 +163,16 @@ const editLink = computed(() => {
   align-self: start;
   margin-top: 10px;
 }
+
 .menu {
   display: flex;
   gap: 20px;
+  align-items: center;
+  margin-right: 2rem;
+}
+
+.editor-header .menu {
+  margin-right: -2rem;
 }
 .menu a {
   text-decoration: none;
@@ -153,6 +181,7 @@ const editLink = computed(() => {
   transition: all 0.3s ease;
   border-radius: 5px;
 }
+
 .menu a:hover {
   color: #1b5e20;
 }
@@ -160,6 +189,18 @@ const editLink = computed(() => {
   background-color: rgba(255, 255, 255, 0.2);
   font-weight: bold;
 }
+
+.search-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px !important;
+}
+.search-icon-btn svg {
+  width: 22px;
+  height: 22px;
+}
+
 .header-edit-btn {
   position: absolute;
   top: 50%;
@@ -185,6 +226,7 @@ const editLink = computed(() => {
 @media (max-width: 1024px) {
   .menu {
     gap: 10px;
+    margin-right: 3rem;
   }
 }
 @media (max-width: 768px) {
@@ -195,6 +237,10 @@ const editLink = computed(() => {
     display: block;
     position: sticky;
     top: 0;
+  }
+  /* 手機版移除額外的 padding，避免擠壓 */
+  .header.editor-header {
+    padding-left: 15px;
   }
   .nav {
     flex-direction: column;
@@ -220,6 +266,7 @@ const editLink = computed(() => {
     margin-top: 5px;
     padding-bottom: 5px;
     width: 100%;
+    margin-right: 0;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
   }

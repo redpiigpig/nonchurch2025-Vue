@@ -14,7 +14,11 @@
         </router-link>
 
         <router-link to="/admin/articles_manager" active-class="active-link">
-          📚 文章管理 (列表)
+          📚 文章管理
+        </router-link>
+
+        <router-link to="/admin/media_manager" active-class="active-link">
+          🖼️ 媒體庫管理
         </router-link>
 
         <router-link to="/admin/editor" active-class="active-link"> 📝 新增文章 </router-link>

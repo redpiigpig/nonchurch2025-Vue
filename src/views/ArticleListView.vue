@@ -1,12 +1,12 @@
 <script setup>
-import { ref, computed, onMounted, watch } from "vue";
-import { useRoute, useRouter } from "vue-router"; // ⭐ 1. 引入 Router
+import { ref, computed, onMounted, watch, nextTick } from "vue";
+import { useRoute, useRouter } from "vue-router";
 import { supabase } from "../supabase";
 import { useEditorMode } from "../composables/useEditorMode";
 import MainLayout from "../components/MainLayout.vue";
 
 const { isEditor } = useEditorMode();
-const route = useRoute(); // ⭐ 建立實例
+const route = useRoute();
 const router = useRouter();
 
 const selectedYear = ref(2025);
@@ -27,6 +27,22 @@ const extractOrderFromId = (idStr) => {
 };
 
 const formatDisplayId = (num) => (num ? num.toString().padStart(2, "0") : "");
+
+// ⭐ 新增：精準滾動函式
+const scrollToAnchor = async () => {
+  if (route.hash) {
+    // 等待 DOM 更新完成 (確保 id="issue-5" 已經存在於頁面上)
+    await nextTick();
+
+    const targetId = route.hash.substring(1); // 去掉 #
+    const element = document.getElementById(targetId);
+
+    if (element) {
+      // 使用 'auto' 瞬間跳轉，不要 'smooth' 滑動，這樣感覺更像原生錨點
+      element.scrollIntoView({ behavior: "auto", block: "center" });
+    }
+  }
+};
 
 const fetchAndGroupArticles = async () => {
   loading.value = true;
@@ -56,7 +72,7 @@ const fetchAndGroupArticles = async () => {
   }
 
   groupedIssues.value = issuesData.map((issue) => {
-    // ... (這段圖片與文章整理邏輯保持不變) ...
+    // 圖片與 PDF 預設路徑邏輯
     const storageBase = "https://pottupypvdzamztdhsah.supabase.co/storage/v1/object/public/images";
     const defaultCover = `${storageBase}/covers/cover-${issue.id}.png`;
     const defaultPdf = `${storageBase}/magazines/Vol.${issue.id}.pdf`;
@@ -120,15 +136,13 @@ const fetchAndGroupArticles = async () => {
     return issue;
   });
 
-  // ⭐ 修改點：決定 selectedYear 的邏輯
+  // 年份選擇邏輯
   const queryYear = parseInt(route.query.year);
   const isQueryValid = yearOptions.some((opt) => opt.value === queryYear);
 
   if (isQueryValid) {
-    // 1. 如果網址有有效參數，優先使用
     selectedYear.value = queryYear;
   } else if (groupedIssues.value.length > 0) {
-    // 2. 否則，自動選取最新一期所在的年份
     const latestIssue = groupedIssues.value[0];
     const latestYear = 2025 + Math.floor((latestIssue.id - 1) / 6);
     if (yearOptions.some((opt) => opt.value === latestYear)) {
@@ -137,6 +151,9 @@ const fetchAndGroupArticles = async () => {
   }
 
   loading.value = false;
+
+  // ⭐ 關鍵：資料載入完成，立刻執行滾動定位
+  scrollToAnchor();
 };
 
 const getCategoryColor = (category) => {
@@ -162,7 +179,6 @@ const filteredIssues = computed(() => {
   });
 });
 
-// ⭐ 監聽年份切換 -> 更新網址
 watch(selectedYear, (newVal) => {
   router.replace({ query: { ...route.query, year: newVal } });
 });
@@ -174,13 +190,7 @@ watch(isEditor, () => {
 onMounted(() => {
   document.title = "文章列表 - 無境界者雜誌";
   fetchAndGroupArticles();
-
-  if (route.hash) {
-    setTimeout(() => {
-      const target = document.querySelector(route.hash);
-      if (target) target.scrollIntoView({ behavior: "smooth" });
-    }, 1500);
-  }
+  // ⭐ 移除原本這裡的 setTimeout scroll 邏輯，改由資料載入後觸發
 });
 </script>
 
@@ -416,16 +426,16 @@ li {
 }
 
 /* ===========================
-   新增：載入動畫樣式
+   載入動畫樣式
    =========================== */
 .loading-state {
   display: flex;
   justify-content: center;
   align-items: center;
-  min-height: 50vh; /* 讓它垂直置中，高度佔畫面一半 */
-  font-size: 2rem; /* 字體大小 */
+  min-height: 50vh;
+  font-size: 2rem;
   color: #888;
-  font-family: serif; /* 如果想要跟內文一樣用襯線體 */
+  font-family: serif;
   font-weight: bold;
 }
 

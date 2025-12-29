@@ -13,6 +13,9 @@ const route = useRoute();
 const article = ref(null);
 const loading = ref(true);
 
+// ⭐ 新增：儲存該期刊資料夾下的所有圖片清單
+const issueImages = ref([]);
+
 const fetchArticleData = async (articleId) => {
   try {
     const { data, error } = await supabase
@@ -34,6 +37,25 @@ const fetchArticleData = async (articleId) => {
   } catch (error) {
     console.error(`載入文章 ${articleId} 失敗:`, error.message);
     return null;
+  }
+};
+
+// ⭐ 新增：讀取該期數的所有圖片 (用於自動解析路徑)
+const fetchIssueImages = async (issueNumber) => {
+  if (!issueNumber) return;
+
+  // 假設路徑結構為: images bucket -> articles -> issue-X
+  const path = `articles/issue-${issueNumber}`;
+
+  const { data, error } = await supabase.storage.from("images").list(path, {
+    limit: 1000,
+    offset: 0,
+    sortBy: { column: "name", order: "asc" },
+  });
+
+  if (!error && data) {
+    issueImages.value = data;
+    console.log(`已載入第 ${issueNumber} 期圖片庫: ${data.length} 張`);
   }
 };
 
@@ -76,6 +98,11 @@ watch(
       const fetchedArticle = await fetchArticleData(newId);
       if (fetchedArticle) {
         article.value = fetchedArticle;
+        // ⭐ 載入文章後，立刻載入該期的圖片庫
+        if (article.value.issue) {
+          await fetchIssueImages(article.value.issue);
+        }
+
         updateMetaTags(article.value.seo, article.value);
         const number = article.value.id.replace(article.value.title, "");
         document.title = `${number} ${article.value.title} - 無境界者雜誌`;
@@ -91,6 +118,12 @@ onMounted(async () => {
     const localData = localStorage.getItem("preview_article");
     if (localData) {
       article.value = JSON.parse(localData);
+
+      // ⭐ 預覽模式也要載入圖片庫
+      if (article.value.issue) {
+        await fetchIssueImages(article.value.issue);
+      }
+
       document.title = `[預覽] ${article.value.title}`;
       loading.value = false;
       return;
@@ -99,11 +132,16 @@ onMounted(async () => {
 
   const articleId = route.params.id;
   const fetchPromise = fetchArticleData(articleId);
-  const delayPromise = new Promise((resolve) => setTimeout(resolve, 2000));
-  const [fetchedArticle] = await Promise.all([fetchPromise, delayPromise]);
+  const fetchedArticle = await fetchPromise;
 
   if (fetchedArticle) {
     article.value = fetchedArticle;
+
+    // ⭐ 載入文章後，立刻載入該期的圖片庫
+    if (article.value.issue) {
+      await fetchIssueImages(article.value.issue);
+    }
+
     updateMetaTags(article.value.seo, article.value);
     const number = article.value.id.replace(article.value.title, "");
     document.title = `${number} ${article.value.title} - 無境界者雜誌`;
@@ -131,6 +169,37 @@ const htmlContent = computed(() => {
   let parsedHtml = marked.parse(fullText, {
     gfm: true,
     breaks: true,
+  });
+
+  // ⭐ 自動圖片路徑解析 (Magic happens here!)
+  // 尋找所有 src="..." 屬性
+  parsedHtml = parsedHtml.replace(/src="([^"]+)"/g, (match, srcValue) => {
+    // 如果已經是完整網址 (http/https) 或 base64 (data:)，就不動它
+    if (srcValue.startsWith("http") || srcValue.startsWith("data:") || srcValue.startsWith("//")) {
+      return match;
+    }
+
+    // 確保 issueImages 已載入
+    if (!issueImages.value || issueImages.value.length === 0) {
+      return match;
+    }
+
+    // 嘗試在 issueImages 清單中尋找匹配的檔案
+    // 支援比對：完全檔名 OR 去除副檔名後的檔名
+    const matchedFile = issueImages.value.find((file) => {
+      const nameWithoutExt = file.name.substring(0, file.name.lastIndexOf(".")) || file.name;
+      return file.name === srcValue || nameWithoutExt === srcValue;
+    });
+
+    if (matchedFile) {
+      // 找到了！組合成完整 URL
+      const fullPath = `articles/issue-${article.value.issue}/${matchedFile.name}`;
+      const { data } = supabase.storage.from("images").getPublicUrl(fullPath);
+      return `src="${data.publicUrl}"`;
+    }
+
+    // 沒找到，回傳原本的
+    return match;
   });
 
   if (article.value.footnotes && article.value.footnotes.length > 0) {
@@ -176,6 +245,20 @@ const categoryColor = computed(() => {
     實驗園地: "#db7093",
   };
   return colorMap[article.value.category] || "#ff8000";
+});
+
+// ⭐ 新增：計算該期雜誌的連結參數 (包含年份與錨點)
+const issueLinkParams = computed(() => {
+  if (!article.value || !article.value.issue) return {};
+
+  // 計算年份：第 1-6 期是 2025, 第 7-12 期是 2026...
+  const year = 2025 + Math.floor((article.value.issue - 1) / 6);
+
+  return {
+    path: "/articles",
+    query: { year: year },
+    hash: `#issue-${article.value.issue}`, // 這裡對應 ArticleListView 的 ID
+  };
 });
 </script>
 
@@ -243,7 +326,7 @@ const categoryColor = computed(() => {
 
         <div class="nav-item">
           <strong>回到本期雜誌目錄</strong>
-          <RouterLink to="/articles">
+          <RouterLink :to="issueLinkParams">
             第{{ article.issue }}期：{{ article.issueTitle }}
           </RouterLink>
         </div>

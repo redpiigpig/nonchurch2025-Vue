@@ -67,17 +67,14 @@ const loadTargetIssue = async () => {
 
   currentIssueData.value = target;
 
-  // ⭐ 同步後台選單的值
+  // 同步後台選單的值
   if (target) {
     adminSelectedIssue.value = target.id;
   }
 
   if (target) {
-    let artQuery = supabase
-      .from("articles")
-      .select("*")
-      .eq("issue", target.id)
-      .order("id", { ascending: true });
+    let artQuery = supabase.from("articles").select("*").eq("issue", target.id);
+    // 這裡先不用資料庫排序，因為資料庫是字串排序，我們改用前端排序
 
     if (!isEditor.value) {
       artQuery = artQuery.eq("is_published", true);
@@ -85,7 +82,13 @@ const loadTargetIssue = async () => {
 
     const { data: articles, error } = await artQuery;
 
-    if (!error) {
+    if (!error && articles) {
+      // ⭐ 關鍵修改：自然排序邏輯 (Natural Sort)
+      // 這會讓 "6-2" 排在 "6-10" 前面
+      articles.sort((a, b) => {
+        return a.id.localeCompare(b.id, undefined, { numeric: true, sensitivity: "base" });
+      });
+
       currentIssueContent.value = articles.map((a) => ({
         routeId: a.id,
         category: a.category,
@@ -103,7 +106,7 @@ const loadTargetIssue = async () => {
   }
 };
 
-// ⭐ 新增：處理後台選單切換
+// 處理後台選單切換
 const handleAdminIssueChange = () => {
   if (!adminSelectedIssue.value) return;
 
