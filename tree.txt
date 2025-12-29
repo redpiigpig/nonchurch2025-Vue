@@ -1,63 +1,98 @@
+Root: C:\Users\user\Desktop\無境界者網站(Vue)\magazine-web
+
 magazine-web/
-├── .editorconfig
-├── .gitignore
-├── .gitattributes
 ├── .vscode/
-│   └── `extensions.json`
-├── index.html
-├── jsconfig.json
-├── package.json
-├── package-lock.json
-├── README.md
-├── vite.config.js
-├── eslint.config.js
-├── tree.txt
+│   ├── extensions.json
+│   └── settings.json
+├── dist/
+│   ├── articles/
+│   │   ├── 5-13話語與肉身.json
+│   │   └── 5-13話語與肉身.md
+│   ├── assets/
+│   │   ├── AdminLayout-B4c7x5ZO.js
+│   │   ├── AdminLayout-BDeKRigZ.css
+│   │   ├── ArticlesManager-BGu5MSiA.js
+│   │   ├── ArticlesManager-BRgYqbTW.css
+│   │   ├── AuthorsManager-B6qEXgg8.css
+│   │   ├── AuthorsManager-DNi0xu69.js
+│   │   ├── EditorView-f2GWapk8.css
+│   │   ├── EditorView-vTdaV1py.js
+│   │   ├── index-CuhI85Fc.css
+│   │   ├── index-J5nSG-gl.js
+│   │   ├── IssuesManager-DE5CAXbf.css
+│   │   ├── IssuesManager-DPAGGzdn.js
+│   │   ├── MediaManager-eMCOCUqr.js
+│   │   ├── MediaManager-fqHyI8QA.css
+│   │   ├── PublishingCenter-C15ykUJz.js
+│   │   └── PublishingCenter-CY39RgFz.css
+│   ├── images/ (簡略)
+│   ├── magazines/
+│   │   ├── Vol.1.pdf
+│   │   ├── Vol.2.pdf
+│   │   ├── Vol.3.pdf
+│   │   ├── Vol.4.pdf
+│   │   ├── Vol.5.pdf
+│   │   └── Vol.6.pdf
+│   └── index.html
 ├── public/
-│   ├── articles/ (omitted except important files)
-│   │   ├── `5-13話語與肉身.md`
-│   │   └── `5-13話語與肉身.json`
-│   ├── images/ (omitted)
-│   └── magazines/ (omitted)
-└── src/
-    ├── `App.vue`
-    ├── `main.js`
-    ├── `supabase.js`
-    ├── assets/
-    │   ├── `article.css`
-    │   └── `base.css`
-    ├── components/
-    │   ├── `AppHeader.vue`
-    │   ├── `AppFooter.vue`
-    │   └── `MainLayout.vue`
-    ├── components/icons/
-    │   ├── `IconCommunity.vue`
-    │   ├── `IconDocumentation.vue`
-    │   ├── `IconEcosystem.vue`
-    │   ├── `IconSupport.vue`
-    │   └── `IconTooling.vue`
-    ├── composables/
-    │   └── `useEditorMode.js`
-    ├── router/
-    │   └── `index.js`
-    ├── stores/
-    │   └── `tempArticles.js`
-    ├── data/
-    │   ├── `authors.js`
-    │   ├── `issues.js`
-    │   └── `submissionThemes.js`
-    └── views/
-        ├── `HomeView.vue`
-        ├── `ArticleListView.vue`
-        ├── `ArticleContent.vue`
-        ├── `AuthorView.vue`
-        ├── `AuthorDetailView.vue`
-        ├── `LoginView.vue`
-        ├── `MissionView.vue`
-        ├── `SearchView.vue`
-        ├── `SubmissionView.vue`
-        └── admin/
-            ├── `AdminLayout.vue`
-            ├── `EditorView.vue`
-            ├── `ArticleListManager.vue`
-            ├── `AuthorManager.vue`
-            └── `IssueManager.vue`
+│   ├── articles/ (簡略)
+│   ├── images/ (簡略)
+│   └── magazines/ (簡略)
+├── scripts/
+│   └── generate-tree.js
+├── src/
+│   ├── assets/
+│   │   ├── article.css
+│   │   ├── main.css
+│   │   └── shared.css
+│   ├── components/
+│   │   ├── icons/
+│   │   │   ├── IconCommunity.vue
+│   │   │   ├── IconDocumentation.vue
+│   │   │   ├── IconEcosystem.vue
+│   │   │   ├── IconSupport.vue
+│   │   │   └── IconTooling.vue
+│   │   ├── AppFooter.vue
+│   │   ├── AppHeader.vue
+│   │   └── MainLayout.vue
+│   ├── composables/
+│   │   └── useEditorMode.js
+│   ├── data/
+│   │   ├── authors.js
+│   │   ├── issues.js
+│   │   └── submissionThemes.js
+│   ├── router/
+│   │   └── index.js
+│   ├── stores/
+│   │   └── tempArticles.js
+│   ├── views/
+│   │   ├── admin/
+│   │   │   ├── AdminLayout.vue
+│   │   │   ├── ArticlesManager.vue
+│   │   │   ├── AuthorsManager.vue
+│   │   │   ├── EditorView.vue
+│   │   │   ├── IssuesManager.vue
+│   │   │   ├── MediaManager.vue
+│   │   │   └── PublishingCenter.vue
+│   │   ├── ArticleContent.vue
+│   │   ├── ArticleListView.vue
+│   │   ├── AuthorDetailView.vue
+│   │   ├── AuthorView.vue
+│   │   ├── HomeView.vue
+│   │   ├── LoginView.vue
+│   │   ├── MissionView.vue
+│   │   ├── SearchView.vue
+│   │   └── SubmissionView.vue
+│   ├── App.vue
+│   ├── main.js
+│   └── supabase.js
+├── .editorconfig
+├── .gitattributes
+├── .gitignore
+├── eslint.config.js
+├── index.html 建置輸出
+├── jsconfig.json
+├── package-lock.json
+├── package.json
+├── README.md
+└── vite.config.js

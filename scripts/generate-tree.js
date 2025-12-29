@@ -4,7 +4,7 @@ import path from "path";
 
 const ROOT = process.cwd();
 const OUTFILE = path.join(ROOT, "tree.txt");
-const IGNORES = new Set(["node_modules", ".git", "dist", "tree.txt"]);
+const IGNORES = new Set(["node_modules", ".git", "tree.txt"]);
 
 function formatDate(d) {
   const pad = (n) => String(n).padStart(2, "0");
@@ -60,14 +60,18 @@ function renderTree(entries, prefix = "") {
     const isLast = idx === entries.length - 1;
     const pointer = isLast ? "└── " : "├── ";
     if (entry.type === "dir") {
-      lines.push(`${prefix}${pointer}${entry.name}/`);
-      const childPrefix = prefix + (isLast ? "    " : "│   ");
-      lines.push(...renderTree(entry.children, childPrefix));
+      // Do not expand image directories; show as simplified
+      if (entry.name === "images") {
+        lines.push(`${prefix}${pointer}${entry.name}/ (簡略)`);
+      } else {
+        lines.push(`${prefix}${pointer}${entry.name}/`);
+        const childPrefix = prefix + (isLast ? "    " : "│   ");
+        lines.push(...renderTree(entry.children, childPrefix));
+      }
     } else {
-      const mtime = entry.mtime ? ` (${formatDate(new Date(entry.mtime))})` : "";
       const label = getChineseLabel(entry.path || entry.name);
       const labelStr = label ? ` ${label}` : "";
-      lines.push(`${prefix}${pointer}${entry.name}${mtime}${labelStr}`);
+      lines.push(`${prefix}${pointer}${entry.name}${labelStr}`);
     }
   });
   return lines;
@@ -106,6 +110,11 @@ function getChineseLabel(relPath) {
     "src/views/admin/ArticleListManager.vue": "文章管理",
     "src/views/admin/AuthorManager.vue": "作者管理",
     "src/views/admin/IssueManager.vue": "期數管理",
+    // dist build outputs
+    "dist/index.html": "建置輸出",
+    "dist/assets": "建置資產",
+    "dist/assets/app.js": "建置 JS",
+    "dist/assets/style.css": "建置 CSS",
   };
 
   // exact match first
@@ -122,8 +131,7 @@ function getChineseLabel(relPath) {
 
 async function generate() {
   const stats = await fs.stat(ROOT);
-  const now = new Date();
-  const header = [`Generated: ${formatDate(now)}`, `Root: ${ROOT}`, ""];
+  const header = [`Root: ${ROOT}`, ""];
 
   const entries = await walk(ROOT);
 
@@ -151,10 +159,9 @@ async function generate() {
       const childPrefix = isLast ? "    " : "│   ";
       topLines.push(...renderTree(entry.children, childPrefix));
     } else {
-      const mtime = entry.mtime ? ` (${formatDate(new Date(entry.mtime))})` : "";
       const label = getChineseLabel(entry.path || entry.name);
       const labelStr = label ? ` ${label}` : "";
-      topLines.push(`${pointer}${entry.name}${mtime}${labelStr}`);
+      topLines.push(`${pointer}${entry.name}${labelStr}`);
     }
   });
 
