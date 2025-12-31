@@ -65,7 +65,7 @@ const router = createRouter({
             // 3. 作者管理
             { path: "authors_manager", name: "admin-authors-manager", component: AuthorsManager },
 
-            // ⭐ 4. 文章管理 (列表模式)
+            // 4. 文章管理 (列表模式)
             {
               path: "articles_manager",
               name: "admin-articles-manager",
@@ -98,23 +98,63 @@ const router = createRouter({
 
     { path: "/:pathMatch(.*)*", redirect: "/home" },
   ],
-  // 滾動行為
+
+  // ⭐ 全域滾動行為設定
   scrollBehavior(to, from, savedPosition) {
-    if (savedPosition) return savedPosition;
-    if (to.hash) {
-      return new Promise((resolve) => {
-        setTimeout(() => {
+    return new Promise((resolve) => {
+      // 1. 禁用瀏覽器預設捲動
+      if ("scrollRestoration" in history) {
+        history.scrollRestoration = "manual";
+      }
+
+      // ⭐ 例外 1：作者列表頁 (authors) 一律跳回頂端
+      if (to.name === "authors") {
+        resolve({ left: 0, top: 0, behavior: "auto" });
+        return;
+      }
+
+      // 等待 1秒 讓資料與圖片載入完成
+      const waitTime = 1000;
+
+      setTimeout(() => {
+        // ⭐ 例外 2：如果歷史紀錄有 forceTop 標記 (來自文章頁底部導航)，強制回頂端
+        // 這裡讀取的是「當下頁面 (restored page)」的狀態
+        if (window.history.state?.forceTop) {
+          resolve({ left: 0, top: 0, behavior: "auto" });
+          return;
+        }
+
+        // ⭐ 例外 3：優先檢查是否有指定的區塊 ID (來自 HomeView/ArticleListView 的點擊紀錄)
+        const customTarget = window.history.state?.scrollTo;
+        if (customTarget) {
+          const el = document.querySelector(customTarget);
+          if (el) {
+            el.scrollIntoView({ behavior: "auto", block: "start" });
+            resolve(false);
+            return;
+          }
+        }
+
+        // 4. 一般上一頁 (還原位置)
+        if (savedPosition) {
+          resolve({ ...savedPosition, behavior: "auto" });
+        }
+        // 5. 錨點連結
+        else if (to.hash) {
           const element = document.querySelector(to.hash);
           if (element) {
-            element.scrollIntoView({ behavior: "auto", block: "center" });
+            element.scrollIntoView({ behavior: "auto", block: "start" });
             resolve(false);
           } else {
-            resolve({ top: 0 });
+            resolve({ top: 0, behavior: "auto" });
           }
-        }, 50);
-      });
-    }
-    return { left: 0, top: 0 };
+        }
+        // 6. 預設回頂端
+        else {
+          resolve({ left: 0, top: 0, behavior: "auto" });
+        }
+      }, waitTime);
+    });
   },
 });
 

@@ -18,6 +18,13 @@ const yearOptions = [
 const groupedIssues = ref([]);
 const loading = ref(true);
 
+// ⭐ 新增：記錄捲動位置的輔助函式
+// 當點擊文章時，記錄這篇文章所屬的期數 ID (例如 #issue-6)
+const saveScrollPosition = (selector) => {
+  const currentState = window.history.state || {};
+  window.history.replaceState({ ...currentState, scrollTo: selector }, "");
+};
+
 const extractOrderFromId = (idStr) => {
   if (!idStr) return 0;
   const match = idStr.match(/-(\d+)/);
@@ -28,17 +35,12 @@ const extractOrderFromId = (idStr) => {
 
 const formatDisplayId = (num) => (num ? num.toString().padStart(2, "0") : "");
 
-// ⭐ 新增：精準滾動函式
 const scrollToAnchor = async () => {
   if (route.hash) {
-    // 等待 DOM 更新完成 (確保 id="issue-5" 已經存在於頁面上)
     await nextTick();
-
-    const targetId = route.hash.substring(1); // 去掉 #
+    const targetId = route.hash.substring(1);
     const element = document.getElementById(targetId);
-
     if (element) {
-      // 使用 'auto' 瞬間跳轉，不要 'smooth' 滑動，這樣感覺更像原生錨點
       element.scrollIntoView({ behavior: "auto", block: "center" });
     }
   }
@@ -72,7 +74,6 @@ const fetchAndGroupArticles = async () => {
   }
 
   groupedIssues.value = issuesData.map((issue) => {
-    // 圖片與 PDF 預設路徑邏輯
     const storageBase = "https://pottupypvdzamztdhsah.supabase.co/storage/v1/object/public/images";
     const defaultCover = `${storageBase}/covers/cover-${issue.id}.png`;
     const defaultPdf = `${storageBase}/magazines/Vol.${issue.id}.pdf`;
@@ -136,7 +137,6 @@ const fetchAndGroupArticles = async () => {
     return issue;
   });
 
-  // 年份選擇邏輯
   const queryYear = parseInt(route.query.year);
   const isQueryValid = yearOptions.some((opt) => opt.value === queryYear);
 
@@ -151,8 +151,6 @@ const fetchAndGroupArticles = async () => {
   }
 
   loading.value = false;
-
-  // ⭐ 關鍵：資料載入完成，立刻執行滾動定位
   scrollToAnchor();
 };
 
@@ -190,7 +188,6 @@ watch(isEditor, () => {
 onMounted(() => {
   document.title = "文章列表 - 無境界者雜誌";
   fetchAndGroupArticles();
-  // ⭐ 移除原本這裡的 setTimeout scroll 邏輯，改由資料載入後觸發
 });
 </script>
 
@@ -260,7 +257,11 @@ onMounted(() => {
                     {{ item.category }}
                   </span>
 
-                  <router-link v-if="item.type !== 'text-only'" :to="`/articles/${item.routeId}`">
+                  <router-link
+                    v-if="item.type !== 'text-only'"
+                    :to="`/articles/${item.routeId}`"
+                    @click="saveScrollPosition(`#issue-${issue.id}`)"
+                  >
                     {{ item.title }}
                     <span v-if="item.subtitle">──{{ item.subtitle }}</span>
 
@@ -424,10 +425,6 @@ li {
   position: relative;
   color: #444;
 }
-
-/* ===========================
-   載入動畫樣式
-   =========================== */
 .loading-state {
   display: flex;
   justify-content: center;
@@ -438,12 +435,10 @@ li {
   font-family: serif;
   font-weight: bold;
 }
-
 .loading-dots::after {
   content: "";
   animation: dots-cycle 2s infinite steps(1);
 }
-
 @keyframes dots-cycle {
   0% {
     content: "";

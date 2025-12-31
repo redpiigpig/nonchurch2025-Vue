@@ -286,7 +286,7 @@ onMounted(() => {
     </div>
 
     <div v-else class="home-container">
-      <section class="current-issue">
+      <section id="current-issue" class="current-issue">
         <div class="left">
           <a :href="currentIssue?.pdfLink || '#'" target="_blank" title="下載本期 PDF 檔">
             <img :src="currentIssue?.coverImg" :alt="currentIssue?.title" class="magazine-cover" />
@@ -319,7 +319,7 @@ onMounted(() => {
         </div>
       </section>
 
-      <section class="diverse-lectures" v-if="specialFeatures.length > 0">
+      <section id="special-features" class="diverse-lectures" v-if="specialFeatures.length > 0">
         <h2><span class="unicode-icon">🎙️</span>特稿專區</h2>
         <div class="article-container two-cols">
           <router-link
@@ -342,7 +342,7 @@ onMounted(() => {
         </div>
       </section>
 
-      <section class="articles" v-if="themePlaza.length > 0">
+      <section id="theme-plaza" class="articles" v-if="themePlaza.length > 0">
         <h2><span class="unicode-icon">🏛️</span>主題廣場</h2>
         <div class="article-container three-cols">
           <router-link
@@ -365,7 +365,7 @@ onMounted(() => {
         </div>
       </section>
 
-      <section class="diverse-lectures" v-if="diverseLectures.length > 0">
+      <section id="diverse-lectures" class="diverse-lectures" v-if="diverseLectures.length > 0">
         <h2><span class="unicode-icon">🎓</span>多元講堂</h2>
         <div class="article-container three-cols">
           <router-link
@@ -388,20 +388,20 @@ onMounted(() => {
         </div>
       </section>
 
-      <section class="authors" v-if="currentIssueAuthors.length > 0">
+      <section id="authors" class="authors" v-if="currentIssueAuthors.length > 0">
         <h2><span class="unicode-icon">✍️</span>本期作者</h2>
         <br />
         <div class="author-container">
           <div v-for="author in currentIssueAuthors" :key="author.id" class="author">
-            <router-link :to="'/authors/' + author.id" :data-tooltip="'閱讀此作者其他文章'">
-              <img :src="author.avatar" :alt="author.name" />
+            <router-link :to="'/authors/' + author.name" :data-tooltip="'閱讀此作者其他文章'">
+              <img :src="author.author_image || author.avatar" :alt="author.name" />
             </router-link>
             <h4>{{ author.name }}</h4>
           </div>
         </div>
       </section>
 
-      <section class="next-preview-submission">
+      <section id="submission" class="next-preview-submission">
         <div class="card-content">
           <h3>徵稿公告</h3>
           <p class="next-issue-text" v-html="formattedIntroCfp"></p>
@@ -417,7 +417,7 @@ onMounted(() => {
         </div>
       </section>
 
-      <section class="search">
+      <section id="search" class="search">
         <h2><span class="construction-icon">🔍</span> 搜尋</h2>
         <br />
         <div class="search-links" v-if="hotKeywords.length > 0">
@@ -455,7 +455,7 @@ onMounted(() => {
         <div class="search-info-box">💡 提示：支援模糊搜尋，請選擇欄位並輸入關鍵字。</div>
       </section>
 
-      <section class="contact">
+      <section id="contact" class="contact">
         <h2><span class="unicode-icon">📧</span>聯繫我們</h2>
         <div class="social-links">
           <a
@@ -580,7 +580,6 @@ h2 {
   transform: translateY(-3px);
 }
 
-/* ... (略過以節省篇幅，請保留您原檔其餘 CSS) ... */
 .current-issue {
   display: flex;
   gap: 2rem;

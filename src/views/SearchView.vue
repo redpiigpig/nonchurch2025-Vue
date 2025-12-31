@@ -174,7 +174,7 @@ const renderMarkers = (text) => {
 watch(() => route.query, fetchResults);
 
 onMounted(() => {
-  fetchLatestKeywords(); // ⭐ 頁面載入時抓取關鍵字
+  fetchLatestKeywords();
   fetchResults();
 });
 </script>
@@ -486,8 +486,8 @@ onMounted(() => {
   font-size: 1rem;
   color: #555;
   font-family: "Times New Roman", serif;
-  white-space: nowrap;
-  flex-shrink: 0;
+  white-space: normal; /* ⭐ 修改處：允許換行 */
+  word-wrap: break-word; /* ⭐ 修改處：長單字也能換行 */
 }
 .article-snippet {
   font-size: 1.05rem;

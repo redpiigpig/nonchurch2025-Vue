@@ -1,0 +1,8 @@
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteCond %{HTTP_HOST} ^nonchurch2025\.byethost10\.com$ [NC]
+  RewriteRule ^(.*)$ http://nonchurch2025.com/$1 [L,R=301,NE]
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule . /index.html [L]
+</IfModule>
