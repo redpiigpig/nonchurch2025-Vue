@@ -130,7 +130,8 @@
 /* Style 1: Inline Quote (em) */
 .markdown-body em {
   font-style: normal;
-  font-family: "DFKai-SB", "標楷體", serif; /* 保留特殊字體 */
+  /* 加入 Mac 的 BiauKai 以及 iOS 專用的 Songti TC */
+  font-family: "DFKai-SB", "標楷體", "BiauKai", "Kaiti TC", "Songti TC", "Songti", serif;
   color: #555;
 }
 
