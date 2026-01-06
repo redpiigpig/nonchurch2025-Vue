@@ -1,6 +1,6 @@
 Root: C:\Users\user\Desktop\無境界者網站(Vue)\magazine-web
 
-magazine-web/
+nonchurch-vue/
 ├── .vscode/
 │   ├── extensions.json
 │   └── settings.json
