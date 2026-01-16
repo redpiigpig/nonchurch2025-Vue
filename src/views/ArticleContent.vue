@@ -5,6 +5,7 @@ import { marked } from "marked";
 import markedFootnote from "marked-footnote";
 import { supabase } from "../supabase";
 import MainLayout from "../components/MainLayout.vue";
+import AudioBookPlayer from "../components/feature_articles/AudioBookPlayer.vue";
 
 marked.use(markedFootnote({ prefixId: "footnote-" }));
 
@@ -14,10 +15,7 @@ const loading = ref(true);
 
 const issueImages = ref([]);
 
-// ⭐ 新增：處理底部導航點擊
-// 當使用者點擊底部導航（上一篇/下一篇/回目錄）離開時，
-// 我們把當前這一頁的歷史狀態標記為 "forceTop"，
-// 這樣按「上一頁」回來時，就會強制跳回頂端，而不是停留在底部。
+// 處理底部導航點擊
 const handleNavClick = () => {
   const currentState = window.history.state || {};
   window.history.replaceState({ ...currentState, forceTop: true }, "");
@@ -27,7 +25,7 @@ const fetchArticleData = async (articleId) => {
   try {
     const { data, error } = await supabase
       .from("articles")
-      .select("*")
+      .select("*") // ⭐ 這裡會自動抓取 type 和 media_data 欄位
       .eq("id", articleId)
       .single();
 
@@ -40,6 +38,8 @@ const fetchArticleData = async (articleId) => {
       prev: data.prev_article,
       next: data.next_article,
       footnotes: data.footnotes || [],
+      // 確保 media_data 存在，防止報錯
+      media_data: data.media_data || {},
     };
   } catch (error) {
     console.error(`載入文章 ${articleId} 失敗:`, error.message);
@@ -222,6 +222,8 @@ const categoryColor = computed(() => {
     封面故事: "#7d6c29",
     光影時刻: "#7d6c29",
     實驗園地: "#db7093",
+    // 可以為有聲書增加一個特別色
+    有聲繪本: "#e91e63",
   };
   return colorMap[article.value.category] || "#ff8000";
 });
@@ -248,7 +250,7 @@ const issueLinkParams = computed(() => {
       <RouterLink to="/articles" class="back-link">回文章列表</RouterLink>
     </div>
 
-    <article v-else class="article-content">
+    <div v-else>
       <div class="title-header">
         <div
           v-if="article.category"
@@ -282,9 +284,19 @@ const issueLinkParams = computed(() => {
         </p>
       </div>
 
-      <div v-if="article.keyword" class="keyword-section" v-html="keywordContent"></div>
-      <br />
-      <div class="markdown-body" v-html="htmlContent"></div>
+      <div v-if="article.type === 'audiobook'">
+        <AudioBookPlayer :article="article" />
+
+        <div v-if="htmlContent" class="audiobook-supplement">
+          <div class="markdown-body" v-html="htmlContent"></div>
+        </div>
+      </div>
+
+      <article v-else class="article-content">
+        <div v-if="article.keyword" class="keyword-section" v-html="keywordContent"></div>
+        <br />
+        <div class="markdown-body" v-html="htmlContent"></div>
+      </article>
 
       <div class="article-navigation">
         <div class="nav-item">
@@ -322,12 +334,19 @@ const issueLinkParams = computed(() => {
           </template>
         </div>
       </div>
-    </article>
+    </div>
   </MainLayout>
 </template>
 
 <style scoped>
-/* (樣式保持不變) */
+/* ⭐ 新增樣式：讓有聲書下方的補充文字稍微隔開 */
+.audiobook-supplement {
+  margin-top: 3rem;
+  padding-top: 2rem;
+  border-top: 1px dashed #ccc;
+}
+
+/* --- 以下保持原有樣式 --- */
 .title-header {
   position: relative;
   margin-bottom: 20px;
