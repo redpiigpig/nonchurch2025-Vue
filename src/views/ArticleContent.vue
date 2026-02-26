@@ -296,11 +296,11 @@ const issueLinkParams = computed(() => {
       </div>
 
       <div v-if="article.type === 'special' && currentSpecialComponent">
-        <component :is="currentSpecialComponent" :article="article" />
-
-        <div v-if="htmlContent" class="audiobook-supplement">
+        <div v-if="htmlContent" class="audiobook-intro">
           <div class="markdown-body" v-html="htmlContent"></div>
         </div>
+
+        <component :is="currentSpecialComponent" :article="article" />
       </div>
 
       <article v-else class="article-content">
@@ -350,14 +350,12 @@ const issueLinkParams = computed(() => {
 </template>
 
 <style scoped>
-/* ⭐ 新增樣式：讓有聲書下方的補充文字稍微隔開 */
-.audiobook-supplement {
-  margin-top: 3rem;
-  padding-top: 2rem;
-  border-top: 1px dashed #ccc;
+.audiobook-intro {
+  margin-bottom: 3rem;
+  padding-bottom: 2rem;
+  border-bottom: 2px dashed #ccc;
 }
 
-/* --- 以下保持原有樣式 --- */
 .title-header {
   position: relative;
   margin-bottom: 20px;

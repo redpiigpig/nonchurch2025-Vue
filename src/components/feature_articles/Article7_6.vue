@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted, onUnmounted, nextTick } from "vue";
+import { ref, computed, onMounted, onUnmounted, nextTick, watch } from "vue";
 import { PageFlip } from "page-flip";
 
 const props = defineProps({
@@ -16,7 +16,7 @@ const mediaData = computed(() => props.article.media_data || {});
 const bookData = computed(() => mediaData.value.book || { pages: [], audio: "" });
 const allPages = computed(() => bookData.value.pages || []);
 
-// 電腦版：切割封面封底與內頁
+// 電腦版：內頁切分
 const interiorPages = computed(() => {
   if (allPages.value.length < 2) return [];
   return allPages.value.slice(1, -1);
@@ -24,6 +24,36 @@ const interiorPages = computed(() => {
 const backCoverPage = computed(() => {
   if (allPages.value.length === 0) return null;
   return allPages.value[allPages.value.length - 1];
+});
+
+// 手機版：圖文合併
+const processedMobilePages = computed(() => {
+  const pages = allPages.value;
+  const result = [];
+  for (let i = 0; i < pages.length; i++) {
+    const current = pages[i];
+    const next = pages[i + 1];
+    if (
+      i > 0 &&
+      i < pages.length - 2 &&
+      current.image &&
+      !current.text &&
+      next &&
+      next.text &&
+      !next.image
+    ) {
+      result.push({
+        image: current.image,
+        imageClass: current.imageClass,
+        text: next.text,
+        audio: current.audio || next.audio,
+      });
+      i++;
+    } else {
+      result.push(current);
+    }
+  }
+  return result;
 });
 
 const isMobile = ref(false);
@@ -34,25 +64,59 @@ let pageFlip = null;
 const bookContainer = ref(null);
 
 // ==========================================
-// 2. 音訊與音量控制
+// 2. 音訊核心邏輯：自動朗讀與播放切換
 // ==========================================
 const audioRef = ref(null);
 const isPlaying = ref(false);
 const isMuted = ref(false);
 const volume = ref(0.8);
 
+// 功能 A：翻頁自動朗讀
+const playPageAudio = (audioUrl) => {
+  if (!audioRef.value) return;
+
+  if (audioUrl) {
+    audioRef.value.src = audioUrl;
+    audioRef.value.load();
+    audioRef.value
+      .play()
+      .then(() => {
+        isPlaying.value = true;
+      })
+      .catch((e) => {
+        console.warn("自動播放受限:", e);
+        isPlaying.value = false;
+      });
+  } else {
+    audioRef.value.pause();
+    isPlaying.value = false;
+  }
+};
+
+// ⭐ 功能 B：播放鍵邏輯 (播放中->暫停 / 暫停或結束->重新開始)
 const togglePlay = () => {
   if (!audioRef.value) return;
-  if (isPlaying.value) audioRef.value.pause();
-  else audioRef.value.play();
-  isPlaying.value = !isPlaying.value;
+
+  if (isPlaying.value) {
+    // 正在播放中按按鈕：暫停
+    audioRef.value.pause();
+    isPlaying.value = false;
+  } else {
+    // 已播完或暫停中按按鈕：從頭重新朗讀
+    audioRef.value.currentTime = 0;
+    audioRef.value
+      .play()
+      .then(() => {
+        isPlaying.value = true;
+      })
+      .catch((e) => console.error("播放失敗:", e));
+  }
 };
 
 const toggleMute = () => {
   if (!audioRef.value) return;
   isMuted.value = !isMuted.value;
-  if (isMuted.value) audioRef.value.volume = 0;
-  else audioRef.value.volume = volume.value;
+  audioRef.value.volume = isMuted.value ? 0 : volume.value;
 };
 
 const onVolumeChange = () => {
@@ -62,142 +126,105 @@ const onVolumeChange = () => {
 };
 
 // ==========================================
-// 3. PageFlip 初始化 (僅限電腦版)
+// 3. 翻頁事件監聽 (自動播放下一頁)
 // ==========================================
 const initPageFlip = () => {
   if (!bookContainer.value || isMobile.value) return;
-
-  if (pageFlip) {
-    pageFlip.destroy();
-    pageFlip = null;
-  }
+  if (pageFlip) pageFlip.destroy();
 
   pageFlip = new PageFlip(bookContainer.value, {
     width: 473,
     height: 675,
     size: "stretch",
-    minWidth: 300,
-    maxWidth: 800,
-    minHeight: 400,
-    maxHeight: 1100,
-    maxShadowOpacity: 0.5,
     showCover: true,
-    mobileScrollSupport: false,
   });
 
   const pages = bookContainer.value.querySelectorAll(".page");
   pageFlip.loadFromHTML(pages);
+
+  pageFlip.on("flip", (e) => {
+    const pageIndex = e.data;
+    const audioUrl = allPages.value[pageIndex]?.audio || allPages.value[pageIndex + 1]?.audio;
+    playPageAudio(audioUrl);
+  });
 };
 
-const prevPageBtn = () => {
-  if (pageFlip) pageFlip.flipPrev();
-};
-const nextPageBtn = () => {
-  if (pageFlip) pageFlip.flipNext();
-};
+watch(mobileCurrentPage, (newIdx) => {
+  if (isMobile.value && showMobileModal.value) {
+    const audioUrl = processedMobilePages.value[newIdx]?.audio;
+    playPageAudio(audioUrl);
+  }
+});
 
 // ==========================================
-// 4. 手機版：彈窗與翻頁邏輯
+// 4. 開啟/關閉閱讀器
 // ==========================================
-
 const openMobileReader = () => {
   showMobileModal.value = true;
   document.body.style.overflow = "hidden";
+  const audioUrl = processedMobilePages.value[0]?.audio;
+  playPageAudio(audioUrl);
 };
 
-// ⭐ 關鍵修改：關閉時重置頁碼
 const closeMobileReader = () => {
   showMobileModal.value = false;
   document.body.style.overflow = "";
-
-  // 重置回第一頁 (封面)
   mobileCurrentPage.value = 0;
-
-  // 關閉時若正在播放，則暫停音樂
-  if (isPlaying.value && audioRef.value) {
-    audioRef.value.pause();
-    isPlaying.value = false;
-  }
+  audioRef.value?.pause();
+  isPlaying.value = false;
 };
+
+const prevPageBtn = () => pageFlip?.flipPrev();
+const nextPageBtn = () => pageFlip?.flipNext();
 
 const touchStartX = ref(0);
 const touchEndX = ref(0);
-const minSwipeDistance = 50;
-
-const onTouchStart = (e) => {
-  touchStartX.value = e.changedTouches[0].screenX;
-};
-
+const onTouchStart = (e) => (touchStartX.value = e.changedTouches[0].screenX);
 const onTouchEnd = (e) => {
   touchEndX.value = e.changedTouches[0].screenX;
-  handleSwipe();
-};
-
-const handleSwipe = () => {
   const distance = touchEndX.value - touchStartX.value;
-  if (Math.abs(distance) < minSwipeDistance) return;
-
-  if (distance > 0) {
-    prevMobilePage();
-  } else {
-    nextMobilePage();
-  }
+  if (Math.abs(distance) < 50) return;
+  distance > 0 ? prevMobilePage() : nextMobilePage();
 };
 
 const nextMobilePage = () => {
-  if (mobileCurrentPage.value < allPages.value.length - 1) {
+  if (mobileCurrentPage.value < processedMobilePages.value.length - 1) {
     mobileCurrentPage.value++;
-    const modalContent = document.querySelector(".mobile-modal-scroll-area");
-    if (modalContent) modalContent.scrollTo({ top: 0, behavior: "smooth" });
+    document.querySelector(".mobile-modal-scroll-area")?.scrollTo({ top: 0, behavior: "smooth" });
   }
 };
 
 const prevMobilePage = () => {
   if (mobileCurrentPage.value > 0) {
     mobileCurrentPage.value--;
-    const modalContent = document.querySelector(".mobile-modal-scroll-area");
-    if (modalContent) modalContent.scrollTo({ top: 0, behavior: "smooth" });
+    document.querySelector(".mobile-modal-scroll-area")?.scrollTo({ top: 0, behavior: "smooth" });
   }
 };
 
-// 偵測螢幕尺寸
 const checkMobile = () => {
-  const wasMobile = isMobile.value;
   isMobile.value = window.innerWidth <= 1100;
-
-  if (wasMobile !== isMobile.value) {
-    if (!isMobile.value) {
-      showMobileModal.value = false;
-      document.body.style.overflow = "";
-      nextTick(() => initPageFlip());
-    } else {
-      if (pageFlip) {
-        pageFlip.destroy();
-        pageFlip = null;
-      }
-    }
+  if (!isMobile.value) {
+    showMobileModal.value = false;
+    document.body.style.overflow = "";
+    nextTick(() => initPageFlip());
+  } else {
+    pageFlip?.destroy();
+    pageFlip = null;
   }
 };
 
 onMounted(() => {
   checkMobile();
   window.addEventListener("resize", checkMobile);
-
-  if (audioRef.value) {
-    audioRef.value.volume = volume.value;
-    audioRef.value.src = bookData.value.audio || "";
-  }
+  if (audioRef.value) audioRef.value.volume = volume.value;
   nextTick(() => {
-    if (!isMobile.value) {
-      initPageFlip();
-    }
+    if (!isMobile.value) initPageFlip();
   });
 });
 
 onUnmounted(() => {
   window.removeEventListener("resize", checkMobile);
-  if (pageFlip) pageFlip.destroy();
-  document.body.style.overflow = "";
+  pageFlip?.destroy();
 });
 </script>
 
@@ -205,12 +232,12 @@ onUnmounted(() => {
   <div class="media-experience-container">
     <div v-if="!isMobile" class="desktop-wrapper">
       <div class="control-bar">
-        <button class="icon-btn" @click="togglePlay" :title="isPlaying ? '暫停' : '播放'">
+        <button class="icon-btn" @click="togglePlay">
           {{ isPlaying ? "⏸" : "▶" }}
         </button>
         <div class="volume-control-group">
           <button class="icon-btn" @click="toggleMute">
-            {{ isMuted || volume === 0 ? "🔇" : volume < 0.5 ? "🔉" : "🔊" }}
+            {{ isMuted || volume === 0 ? "🔇" : "🔊" }}
           </button>
           <div class="volume-slider-wrapper">
             <input
@@ -224,9 +251,7 @@ onUnmounted(() => {
             />
           </div>
         </div>
-        <div class="mode-switch-group">
-          <span class="mode-label">📖 有聲繪本</span>
-        </div>
+        <div class="mode-switch-group"><span class="mode-label">📖 有聲繪本</span></div>
       </div>
 
       <div class="book-scene-container">
@@ -239,36 +264,22 @@ onUnmounted(() => {
           <div v-for="(page, index) in interiorPages" :key="index" class="page">
             <div class="page-content interior-page">
               <div class="page-image-area" v-if="page.image">
-                <img
-                  :src="page.image"
-                  :class="page.imageClass ? page.imageClass : 'page-img'"
-                  loading="lazy"
-                />
+                <img :src="page.image" :class="page.imageClass || 'page-img'" />
               </div>
               <div class="page-text-area" v-if="page.text" :class="{ 'text-only': !page.image }">
                 <div v-html="page.text" class="text-content"></div>
-                <span
-                  class="page-number"
-                  :class="(index + 1) % 2 !== 0 ? 'num-left' : 'num-right'"
-                  >{{ index + 1 }}</span
-                >
               </div>
             </div>
           </div>
           <div class="page page-cover" data-density="hard">
             <div class="page-content cover-layout">
-              <img
-                v-if="backCoverPage && backCoverPage.image"
-                :src="backCoverPage.image"
-                class="cover-img-full"
-              />
+              <img v-if="backCoverPage?.image" :src="backCoverPage.image" class="cover-img-full" />
               <div v-else class="back-cover-placeholder"><h3>THE END</h3></div>
             </div>
           </div>
         </div>
         <div class="nav-arrow left" @click="prevPageBtn">❮</div>
         <div class="nav-arrow right" @click="nextPageBtn">❯</div>
-        <p class="hint-text">💡 拖曳角落翻頁</p>
       </div>
     </div>
 
@@ -277,13 +288,8 @@ onUnmounted(() => {
         <div class="preview-cover-box">
           <img v-if="allPages.length > 0" :src="allPages[0].image" class="preview-cover-img" />
           <div class="play-overlay">
-            <span class="play-icon">📖</span>
-            <span class="play-text">點擊開始閱讀</span>
+            <span class="play-icon">📖</span><span class="play-text">點擊開始朗讀</span>
           </div>
-        </div>
-        <div class="preview-info">
-          <h3>有聲繪本體驗</h3>
-          <p>點擊上方圖片進入全螢幕閱讀模式</p>
         </div>
       </div>
 
@@ -300,57 +306,48 @@ onUnmounted(() => {
             </div>
             <button class="close-btn" @click="closeMobileReader">✕</button>
           </div>
-
           <div class="mobile-modal-scroll-area" @touchstart="onTouchStart" @touchend="onTouchEnd">
             <transition name="slide-fade" mode="out-in">
               <div :key="mobileCurrentPage" class="mobile-page-content">
-                <div v-if="allPages[mobileCurrentPage].image" class="mobile-img-box">
+                <div v-if="processedMobilePages[mobileCurrentPage].image" class="mobile-img-box">
                   <img
-                    :src="allPages[mobileCurrentPage].image"
+                    :src="processedMobilePages[mobileCurrentPage].image"
                     :class="
-                      allPages[mobileCurrentPage].imageClass ? 'mobile-role-img' : 'mobile-std-img'
+                      processedMobilePages[mobileCurrentPage].imageClass
+                        ? 'mobile-role-img'
+                        : 'mobile-std-img'
                     "
-                    loading="lazy"
                   />
                 </div>
                 <div class="mobile-text-box">
                   <div
-                    v-if="allPages[mobileCurrentPage].text"
-                    v-html="allPages[mobileCurrentPage].text"
+                    v-if="processedMobilePages[mobileCurrentPage].text"
+                    v-html="processedMobilePages[mobileCurrentPage].text"
                     class="text-content"
                   ></div>
-                </div>
-                <div
-                  class="mobile-page-num"
-                  v-if="mobileCurrentPage > 0 && mobileCurrentPage < allPages.length - 1"
-                >
-                  - {{ mobileCurrentPage }} -
                 </div>
               </div>
             </transition>
           </div>
-
           <div class="mobile-nav-bar">
             <button
-              class="nav-btn prev"
+              class="nav-btn"
               @click.stop="prevMobilePage"
               :disabled="mobileCurrentPage === 0"
             >
               ❮ 上一頁
             </button>
-            <span class="nav-info">
-              {{
-                mobileCurrentPage === 0
-                  ? "封面"
-                  : mobileCurrentPage === allPages.length - 1
+            <span class="nav-info">{{
+              mobileCurrentPage === 0
+                ? "封面"
+                : mobileCurrentPage === processedMobilePages.length - 1
                   ? "封底"
-                  : `${mobileCurrentPage} / ${allPages.length - 2}`
-              }}
-            </span>
+                  : `第 ${mobileCurrentPage} 頁`
+            }}</span>
             <button
-              class="nav-btn next"
+              class="nav-btn"
               @click.stop="nextMobilePage"
-              :disabled="mobileCurrentPage === allPages.length - 1"
+              :disabled="mobileCurrentPage === processedMobilePages.length - 1"
             >
               下一頁 ❯
             </button>
@@ -358,7 +355,6 @@ onUnmounted(() => {
         </div>
       </transition>
     </div>
-
     <audio ref="audioRef" @ended="isPlaying = false"></audio>
   </div>
 </template>
@@ -511,7 +507,7 @@ onUnmounted(() => {
 .page-text-area.text-only {
   flex: 1;
   justify-content: center;
-  padding: 30px;
+  padding: 25px;
 }
 .text-content {
   text-align: justify;
