@@ -112,7 +112,6 @@ watch(
   },
 );
 
-// 建立一個對照表，當遇到特定的 ID 關鍵字，就載入對應的組件
 const specialComponentsMap = {
   "7-6他們是誰": defineAsyncComponent(
     () => import("../components/feature_articles/Article7_6.vue"),
@@ -296,6 +295,10 @@ const issueLinkParams = computed(() => {
       </div>
 
       <div v-if="article.type === 'special' && currentSpecialComponent">
+<<<<<<< HEAD
+=======
+        <div v-if="article.keyword" class="keyword-section" v-html="keywordContent"></div>
+>>>>>>> 42c9988 (有聲書播放功能調整)
         <div v-if="htmlContent" class="audiobook-intro">
           <div class="markdown-body" v-html="htmlContent"></div>
         </div>
