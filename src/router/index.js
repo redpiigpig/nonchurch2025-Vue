@@ -50,7 +50,7 @@ const router = createRouter({
       meta: { requiresAuth: true },
       children: [
         // -------------------------
-        // A. 真・後台管理介面 (SideBar 連結到這裡)
+        // A. 後台管理介面
         // -------------------------
         {
           path: "",

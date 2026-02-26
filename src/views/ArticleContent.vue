@@ -5,7 +5,7 @@ import { marked } from "marked";
 import markedFootnote from "marked-footnote";
 import { supabase } from "../supabase";
 import MainLayout from "../components/MainLayout.vue";
-import AudioBookPlayer from "../components/feature_articles/AudioBookPlayer.vue";
+import { defineAsyncComponent } from "vue";
 
 marked.use(markedFootnote({ prefixId: "footnote-" }));
 
@@ -25,7 +25,7 @@ const fetchArticleData = async (articleId) => {
   try {
     const { data, error } = await supabase
       .from("articles")
-      .select("*") // ⭐ 這裡會自動抓取 type 和 media_data 欄位
+      .select("*")
       .eq("id", articleId)
       .single();
 
@@ -109,8 +109,21 @@ watch(
       }
       loading.value = false;
     }
-  }
+  },
 );
+
+// 建立一個對照表，當遇到特定的 ID 關鍵字，就載入對應的組件
+const specialComponentsMap = {
+  "7-6他們是誰": defineAsyncComponent(
+    () => import("../components/feature_articles/Article7_6.vue"),
+  ),
+};
+const currentSpecialComponent = computed(() => {
+  if (!article.value || article.value.type !== "special") return null;
+  const matchKey = Object.keys(specialComponentsMap).find((key) => article.value.id.includes(key));
+
+  return matchKey ? specialComponentsMap[matchKey] : null;
+});
 
 onMounted(async () => {
   loading.value = true;
@@ -222,8 +235,6 @@ const categoryColor = computed(() => {
     封面故事: "#7d6c29",
     光影時刻: "#7d6c29",
     實驗園地: "#db7093",
-    // 可以為有聲書增加一個特別色
-    有聲繪本: "#e91e63",
   };
   return colorMap[article.value.category] || "#ff8000";
 });
@@ -284,8 +295,8 @@ const issueLinkParams = computed(() => {
         </p>
       </div>
 
-      <div v-if="article.type === 'audiobook'">
-        <AudioBookPlayer :article="article" />
+      <div v-if="article.type === 'special' && currentSpecialComponent">
+        <component :is="currentSpecialComponent" :article="article" />
 
         <div v-if="htmlContent" class="audiobook-supplement">
           <div class="markdown-body" v-html="htmlContent"></div>
