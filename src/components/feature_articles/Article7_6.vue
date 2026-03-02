@@ -10,27 +10,169 @@ const props = defineProps({
 });
 
 // ==========================================
-// 1. 資料解析
+// 1. 資料解析與模式控制
 // ==========================================
 const mediaData = computed(() => props.article.media_data || {});
 const bookData = computed(() => mediaData.value.book || { pages: [], audio: "" });
+const slideshowData = computed(() => mediaData.value.slideshow || { slides: [], audio: "" });
 const allPages = computed(() => bookData.value.pages || []);
 
-// 電腦版：內頁切分
-const interiorPages = computed(() => {
-  if (allPages.value.length < 2) return [];
-  return allPages.value.slice(1, -1);
-});
-const backCoverPage = computed(() => {
-  if (allPages.value.length === 0) return null;
-  return allPages.value[allPages.value.length - 1];
-});
+const currentMode = ref("book");
+const currentSlideIndex = ref(0);
 
-<<<<<<< HEAD
-// 手機版：圖文合併
-=======
-// 手機版：圖文合併邏輯 (⭐ 加入 audio 欄位合併)
->>>>>>> 42c9988 (有聲書播放功能調整)
+// 切換模式
+const toggleMode = () => {
+  audioRef.value?.pause();
+  isPlaying.value = false;
+
+  if (currentMode.value === "book") {
+    currentMode.value = "slideshow";
+    currentSlideIndex.value = 0;
+
+    // 載入長音樂並從 0 秒開始自動播放
+    if (audioRef.value && slideshowData.value.audio) {
+      audioRef.value.src = slideshowData.value.audio;
+      audioRef.value.currentTime = 0;
+      audioRef.value
+        .play()
+        .then(() => {
+          isPlaying.value = true;
+        })
+        .catch((e) => {
+          console.warn("自動播放受瀏覽器限制，請手動點擊播放:", e);
+          isPlaying.value = false;
+        });
+    }
+  } else {
+    currentMode.value = "book";
+    nextTick(() => initPageFlip());
+  }
+};
+
+// ==========================================
+// 2. 音訊核心邏輯與絕對同步
+// ==========================================
+const audioRef = ref(null);
+const isPlaying = ref(false);
+const isMuted = ref(false);
+const volume = ref(0.8);
+
+const onAudioTimeUpdate = () => {
+  if (!audioRef.value || currentMode.value !== "slideshow") return;
+
+  const currentTime = audioRef.value.currentTime;
+  const expectedIndex = Math.floor(currentTime / 10);
+  const totalSlides = slideshowData.value.slides.length;
+
+  if (totalSlides === 0) return;
+
+  if (expectedIndex < totalSlides - 1) {
+    currentSlideIndex.value = expectedIndex;
+  } else {
+    currentSlideIndex.value = totalSlides - 1;
+  }
+};
+
+const onSlideSeek = (e) => {
+  const targetIndex = parseInt(e.target.value, 10);
+  currentSlideIndex.value = targetIndex;
+  if (audioRef.value) {
+    audioRef.value.currentTime = targetIndex * 10;
+  }
+};
+
+const togglePlay = () => {
+  if (!audioRef.value) return;
+
+  if (isPlaying.value) {
+    audioRef.value.pause();
+    isPlaying.value = false;
+  } else {
+    if (audioRef.value.ended) {
+      audioRef.value.currentTime = 0;
+      if (currentMode.value === "slideshow") currentSlideIndex.value = 0;
+    }
+
+    audioRef.value.play().then(() => {
+      isPlaying.value = true;
+    });
+  }
+};
+
+const playPageAudio = (audioUrl) => {
+  if (!audioRef.value || currentMode.value !== "book") return;
+  if (audioUrl) {
+    audioRef.value.src = audioUrl;
+    audioRef.value.load();
+    audioRef.value
+      .play()
+      .then(() => {
+        isPlaying.value = true;
+      })
+      .catch(() => {
+        isPlaying.value = false;
+      });
+  } else {
+    audioRef.value.pause();
+    isPlaying.value = false;
+  }
+};
+
+const toggleMute = () => {
+  if (!audioRef.value) return;
+  isMuted.value = !isMuted.value;
+  audioRef.value.volume = isMuted.value ? 0 : volume.value;
+};
+
+const onVolumeChange = () => {
+  if (audioRef.value) audioRef.value.volume = volume.value;
+};
+
+// ==========================================
+// 3. PageFlip (繪本模式)
+// ==========================================
+let pageFlip = null;
+const bookContainer = ref(null);
+
+const interiorPages = computed(() =>
+  allPages.value.length < 2 ? [] : allPages.value.slice(1, -1),
+);
+const backCoverPage = computed(() =>
+  allPages.value.length === 0 ? null : allPages.value[allPages.value.length - 1],
+);
+
+const initPageFlip = () => {
+  if (!bookContainer.value || isMobile.value || currentMode.value !== "book") return;
+  if (pageFlip) pageFlip.destroy();
+
+  pageFlip = new PageFlip(bookContainer.value, {
+    width: 473,
+    height: 675,
+    size: "stretch",
+    minWidth: 300,
+    maxWidth: 800,
+    minHeight: 400,
+    maxHeight: 1100,
+    maxShadowOpacity: 0.5,
+    showCover: true,
+    mobileScrollSupport: false,
+  });
+
+  pageFlip.loadFromHTML(bookContainer.value.querySelectorAll(".page"));
+
+  pageFlip.on("flip", (e) => {
+    const audioUrl = allPages.value[e.data]?.audio || allPages.value[e.data + 1]?.audio;
+    playPageAudio(audioUrl);
+  });
+};
+
+// ==========================================
+// 4. 手機版邏輯
+// ==========================================
+const isMobile = ref(false);
+const mobileCurrentPage = ref(0);
+const showMobileModal = ref(false);
+
 const processedMobilePages = computed(() => {
   const pages = allPages.value;
   const result = [];
@@ -46,16 +188,7 @@ const processedMobilePages = computed(() => {
       next.text &&
       !next.image
     ) {
-      result.push({
-        image: current.image,
-        imageClass: current.imageClass,
-        text: next.text,
-<<<<<<< HEAD
-        audio: current.audio || next.audio,
-=======
-        audio: current.audio || next.audio, // ⭐ 這裡要接住音檔網址
->>>>>>> 42c9988 (有聲書播放功能調整)
-      });
+      result.push({ ...current, text: next.text, audio: current.audio || next.audio });
       i++;
     } else {
       result.push(current);
@@ -64,255 +197,38 @@ const processedMobilePages = computed(() => {
   return result;
 });
 
-const isMobile = ref(false);
-const mobileCurrentPage = ref(0);
-const showMobileModal = ref(false);
-
-let pageFlip = null;
-const bookContainer = ref(null);
-
-// ==========================================
-<<<<<<< HEAD
-// 2. 音訊核心邏輯：自動朗讀與播放切換
-=======
-// 2. 音訊核心邏輯 (⭐ 翻頁自動播放 / 重新播放)
->>>>>>> 42c9988 (有聲書播放功能調整)
-// ==========================================
-const audioRef = ref(null);
-const isPlaying = ref(false);
-const isMuted = ref(false);
-const volume = ref(0.8);
-
-<<<<<<< HEAD
-// 功能 A：翻頁自動朗讀
-const playPageAudio = (audioUrl) => {
-  if (!audioRef.value) return;
-
-=======
-// ⭐ 執行朗讀
-const playPageAudio = (audioUrl) => {
-  if (!audioRef.value) return;
->>>>>>> 42c9988 (有聲書播放功能調整)
-  if (audioUrl) {
-    audioRef.value.src = audioUrl;
-    audioRef.value.load();
-    audioRef.value
-      .play()
-      .then(() => {
-        isPlaying.value = true;
-      })
-      .catch((e) => {
-<<<<<<< HEAD
-        console.warn("自動播放受限:", e);
-=======
-        console.warn("自動播放受限，等待互動:", e);
->>>>>>> 42c9988 (有聲書播放功能調整)
-        isPlaying.value = false;
-      });
-  } else {
-    audioRef.value.pause();
-    isPlaying.value = false;
-  }
-};
-
-<<<<<<< HEAD
-// ⭐ 功能 B：播放鍵邏輯 (播放中->暫停 / 暫停或結束->重新開始)
-const togglePlay = () => {
-  if (!audioRef.value) return;
-
-  if (isPlaying.value) {
-    // 正在播放中按按鈕：暫停
-    audioRef.value.pause();
-    isPlaying.value = false;
-  } else {
-    // 已播完或暫停中按按鈕：從頭重新朗讀
-    audioRef.value.currentTime = 0;
-    audioRef.value
-      .play()
-      .then(() => {
-        isPlaying.value = true;
-      })
-      .catch((e) => console.error("播放失敗:", e));
-=======
-// ⭐ 播放鍵邏輯 (播放中點擊暫停，其餘重播)
-const togglePlay = () => {
-  if (!audioRef.value) return;
-  if (isPlaying.value) {
-    audioRef.value.pause();
-    isPlaying.value = false;
-  } else {
-    audioRef.value.currentTime = 0; // ⭐ 從頭播放
-    audioRef.value.play().then(() => {
-      isPlaying.value = true;
-    });
->>>>>>> 42c9988 (有聲書播放功能調整)
-  }
-};
-
-const toggleMute = () => {
-  if (!audioRef.value) return;
-  isMuted.value = !isMuted.value;
-  audioRef.value.volume = isMuted.value ? 0 : volume.value;
-};
-
-const onVolumeChange = () => {
-  if (!audioRef.value) return;
-  audioRef.value.volume = volume.value;
-  if (volume.value > 0) isMuted.value = false;
-};
-
-// ==========================================
-<<<<<<< HEAD
-// 3. 翻頁事件監聽 (自動播放下一頁)
-// ==========================================
-const initPageFlip = () => {
-  if (!bookContainer.value || isMobile.value) return;
-  if (pageFlip) pageFlip.destroy();
-=======
-// 3. PageFlip 初始化與偵測翻頁
-// ==========================================
-const initPageFlip = () => {
-  if (!bookContainer.value || isMobile.value) return;
-  if (pageFlip) {
-    pageFlip.destroy();
-    pageFlip = null;
-  }
->>>>>>> 42c9988 (有聲書播放功能調整)
-
-  pageFlip = new PageFlip(bookContainer.value, {
-    width: 473,
-    height: 675,
-    size: "stretch",
-    showCover: true,
-  });
-
-  const pages = bookContainer.value.querySelectorAll(".page");
-  pageFlip.loadFromHTML(pages);
-
-<<<<<<< HEAD
-  pageFlip.on("flip", (e) => {
-    const pageIndex = e.data;
-=======
-  // ⭐ 電腦版翻頁偵測
-  pageFlip.on("flip", (e) => {
-    const pageIndex = e.data;
-    // 檢查左右兩頁是否有音檔
->>>>>>> 42c9988 (有聲書播放功能調整)
-    const audioUrl = allPages.value[pageIndex]?.audio || allPages.value[pageIndex + 1]?.audio;
-    playPageAudio(audioUrl);
-  });
-};
-
-watch(mobileCurrentPage, (newIdx) => {
-  if (isMobile.value && showMobileModal.value) {
-    const audioUrl = processedMobilePages.value[newIdx]?.audio;
-    playPageAudio(audioUrl);
-  }
-});
-
-// ==========================================
-<<<<<<< HEAD
-// 4. 開啟/關閉閱讀器
-=======
-// 4. 手機版邏輯
->>>>>>> 42c9988 (有聲書播放功能調整)
-// ==========================================
 const openMobileReader = () => {
   showMobileModal.value = true;
   document.body.style.overflow = "hidden";
-<<<<<<< HEAD
-  const audioUrl = processedMobilePages.value[0]?.audio;
-  playPageAudio(audioUrl);
-=======
-  // 開啟瞬間播放第一頁音檔
-  playPageAudio(processedMobilePages.value[0]?.audio);
->>>>>>> 42c9988 (有聲書播放功能調整)
+  if (currentMode.value === "book") {
+    playPageAudio(processedMobilePages.value[0]?.audio);
+  } else {
+    if (audioRef.value)
+      audioRef.value.play().then(() => {
+        isPlaying.value = true;
+      });
+  }
 };
 
 const closeMobileReader = () => {
   showMobileModal.value = false;
   document.body.style.overflow = "";
   mobileCurrentPage.value = 0;
-<<<<<<< HEAD
   audioRef.value?.pause();
   isPlaying.value = false;
 };
 
-const prevPageBtn = () => pageFlip?.flipPrev();
-const nextPageBtn = () => pageFlip?.flipNext();
-
-const touchStartX = ref(0);
-const touchEndX = ref(0);
-const onTouchStart = (e) => (touchStartX.value = e.changedTouches[0].screenX);
-const onTouchEnd = (e) => {
-  touchEndX.value = e.changedTouches[0].screenX;
-  const distance = touchEndX.value - touchStartX.value;
-  if (Math.abs(distance) < 50) return;
-=======
-  if (audioRef.value) {
-    audioRef.value.pause();
-    isPlaying.value = false;
-  }
-};
-
-// ⭐ 手機版翻頁偵測
-watch(mobileCurrentPage, (newIdx) => {
-  if (isMobile.value && showMobileModal.value) {
-    playPageAudio(processedMobilePages.value[newIdx]?.audio);
-  }
-});
-
-const touchStartX = ref(0);
-const touchEndX = ref(0);
-const minSwipeDistance = 50;
-const onTouchStart = (e) => {
-  touchStartX.value = e.changedTouches[0].screenX;
-};
-const onTouchEnd = (e) => {
-  touchEndX.value = e.changedTouches[0].screenX;
-  const distance = touchEndX.value - touchStartX.value;
-  if (Math.abs(distance) < minSwipeDistance) return;
->>>>>>> 42c9988 (有聲書播放功能調整)
-  distance > 0 ? prevMobilePage() : nextMobilePage();
-};
-
-const nextMobilePage = () => {
-  if (mobileCurrentPage.value < processedMobilePages.value.length - 1) {
-    mobileCurrentPage.value++;
-    document.querySelector(".mobile-modal-scroll-area")?.scrollTo({ top: 0, behavior: "smooth" });
-  }
-};
-
-const prevMobilePage = () => {
-  if (mobileCurrentPage.value > 0) {
-    mobileCurrentPage.value--;
-    document.querySelector(".mobile-modal-scroll-area")?.scrollTo({ top: 0, behavior: "smooth" });
-  }
-};
-
 const checkMobile = () => {
+  const wasMobile = isMobile.value;
   isMobile.value = window.innerWidth <= 1100;
-<<<<<<< HEAD
-  if (!isMobile.value) {
-    showMobileModal.value = false;
-    document.body.style.overflow = "";
-    nextTick(() => initPageFlip());
-  } else {
-    pageFlip?.destroy();
-    pageFlip = null;
-=======
   if (wasMobile !== isMobile.value) {
     if (!isMobile.value) {
       showMobileModal.value = false;
-      document.body.style.overflow = "";
       nextTick(() => initPageFlip());
-    } else {
-      if (pageFlip) {
-        pageFlip.destroy();
-        pageFlip = null;
-      }
+    } else if (pageFlip) {
+      pageFlip.destroy();
+      pageFlip = null;
     }
->>>>>>> 42c9988 (有聲書播放功能調整)
   }
 };
 
@@ -335,16 +251,12 @@ onUnmounted(() => {
   <div class="media-experience-container">
     <div v-if="!isMobile" class="desktop-wrapper">
       <div class="control-bar">
-<<<<<<< HEAD
-        <button class="icon-btn" @click="togglePlay">
-=======
         <button class="icon-btn" @click="togglePlay" :title="isPlaying ? '暫停' : '朗讀'">
->>>>>>> 42c9988 (有聲書播放功能調整)
           {{ isPlaying ? "⏸" : "▶" }}
         </button>
         <div class="volume-control-group">
           <button class="icon-btn" @click="toggleMute">
-            {{ isMuted || volume === 0 ? "🔇" : "🔊" }}
+            {{ isMuted || volume === 0 ? "🔇" : volume < 0.5 ? "🔉" : "🔊" }}
           </button>
           <div class="volume-slider-wrapper">
             <input
@@ -358,35 +270,75 @@ onUnmounted(() => {
             />
           </div>
         </div>
-        <div class="mode-switch-group"><span class="mode-label">📖 有聲繪本</span></div>
+        <div class="mode-switch-group">
+          <span class="mode-label" @click="toggleMode" style="cursor: pointer; background: #555">
+            {{ currentMode === "book" ? "📸 照片回顧" : "📖 有聲繪本" }}
+          </span>
+        </div>
       </div>
 
       <div class="book-scene-container">
-        <div class="flip-book" ref="bookContainer">
-          <div class="page page-cover" data-density="hard">
-            <div class="page-content cover-layout">
-              <img v-if="allPages.length > 0" :src="allPages[0].image" class="cover-img-full" />
-            </div>
-          </div>
-          <div v-for="(page, index) in interiorPages" :key="index" class="page">
-            <div class="page-content interior-page">
-              <div class="page-image-area" v-if="page.image">
-                <img :src="page.image" :class="page.imageClass || 'page-img'" />
-              </div>
-              <div class="page-text-area" v-if="page.text" :class="{ 'text-only': !page.image }">
-                <div v-html="page.text" class="text-content"></div>
+        <template v-if="currentMode === 'book'">
+          <div class="flip-book" ref="bookContainer">
+            <div class="page page-cover" data-density="hard">
+              <div class="page-content cover-layout">
+                <img v-if="allPages.length > 0" :src="allPages[0].image" class="cover-img-full" />
               </div>
             </div>
-          </div>
-          <div class="page page-cover" data-density="hard">
-            <div class="page-content cover-layout">
-              <img v-if="backCoverPage?.image" :src="backCoverPage.image" class="cover-img-full" />
-              <div v-else class="back-cover-placeholder"><h3>THE END</h3></div>
+            <div v-for="(page, index) in interiorPages" :key="index" class="page">
+              <div class="page-content interior-page">
+                <div class="page-image-area" v-if="page.image">
+                  <img
+                    :src="page.image"
+                    :class="page.imageClass ? page.imageClass : 'page-img'"
+                    loading="lazy"
+                  />
+                </div>
+                <div class="page-text-area" v-if="page.text" :class="{ 'text-only': !page.image }">
+                  <div v-html="page.text" class="text-content"></div>
+                </div>
+              </div>
             </div>
+            <div class="page page-cover" data-density="hard">
+              <div class="page-content cover-layout end-page-box" @click="toggleMode">
+                <img
+                  v-if="backCoverPage && backCoverPage.image"
+                  :src="backCoverPage.image"
+                  class="cover-img-full"
+                />
+                <div v-else class="back-cover-placeholder"><h3>THE END</h3></div>
+                <div class="slideshow-jump-hint">照片回顧 ❯</div>
+              </div>
+            </div>
+          </div>
+          <div class="nav-arrow left" @click="pageFlip?.flipPrev()">❮</div>
+          <div class="nav-arrow right" @click="pageFlip?.flipNext()">❯</div>
+        </template>
+
+        <div v-else class="slideshow-stage">
+          <transition name="fade" mode="out-in">
+            <div :key="currentSlideIndex" class="slide-card">
+              <div class="slide-img-box">
+                <img :src="slideshowData.slides[currentSlideIndex]?.image" class="slide-main-img" />
+              </div>
+              <div class="slide-caption">
+                <p v-html="slideshowData.slides[currentSlideIndex]?.text"></p>
+              </div>
+            </div>
+          </transition>
+          <div class="slideshow-progress-wrapper">
+            <input
+              type="range"
+              class="slide-range"
+              min="0"
+              :max="slideshowData.slides.length > 0 ? slideshowData.slides.length - 1 : 0"
+              v-model.number="currentSlideIndex"
+              @input="onSlideSeek"
+            />
           </div>
         </div>
-        <div class="nav-arrow left" @click="prevPageBtn">❮</div>
-        <div class="nav-arrow right" @click="nextPageBtn">❯</div>
+
+        <p v-if="currentMode === 'book'" class="hint-text">💡 拖曳角落翻頁</p>
       </div>
     </div>
 
@@ -395,100 +347,183 @@ onUnmounted(() => {
         <div class="preview-cover-box">
           <img v-if="allPages.length > 0" :src="allPages[0].image" class="preview-cover-img" />
           <div class="play-overlay">
-            <span class="play-icon">📖</span><span class="play-text">點擊開始朗讀</span>
+            <span class="play-text"
+              >點擊開始：{{ currentMode === "book" ? "有聲繪本" : "照片回顧" }}</span
+            >
           </div>
         </div>
       </div>
-
       <transition name="fade-modal">
         <div v-if="showMobileModal" class="mobile-modal-overlay">
           <div class="mobile-header-bar">
             <div class="mobile-audio-controls">
               <button class="icon-btn" @click="togglePlay">{{ isPlaying ? "⏸" : "▶" }}</button>
-              <button class="icon-btn" @click="toggleMute">
-                {{ isMuted || volume === 0 ? "🔇" : "🔊" }}
+              <button
+                class="mode-label small"
+                @click="toggleMode"
+                style="background: #555; border: 1px solid #777; font-size: 0.8rem"
+              >
+                切換模式
               </button>
             </div>
             <button class="close-btn" @click="closeMobileReader">✕</button>
           </div>
-          <div class="mobile-modal-scroll-area" @touchstart="onTouchStart" @touchend="onTouchEnd">
-            <transition name="slide-fade" mode="out-in">
-              <div :key="mobileCurrentPage" class="mobile-page-content">
-                <div v-if="processedMobilePages[mobileCurrentPage].image" class="mobile-img-box">
-                  <img
-                    :src="processedMobilePages[mobileCurrentPage].image"
-                    :class="
-                      processedMobilePages[mobileCurrentPage].imageClass
-                        ? 'mobile-role-img'
-                        : 'mobile-std-img'
-                    "
-                  />
-                </div>
-                <div class="mobile-text-box">
-                  <div
-                    v-if="processedMobilePages[mobileCurrentPage].text"
-                    v-html="processedMobilePages[mobileCurrentPage].text"
-                    class="text-content"
-                  ></div>
-                </div>
-<<<<<<< HEAD
-=======
-                <div
-                  class="mobile-page-num"
-                  v-if="
-                    mobileCurrentPage > 0 && mobileCurrentPage < processedMobilePages.length - 1
-                  "
-                >
-                  - {{ mobileCurrentPage }} -
-                </div>
->>>>>>> 42c9988 (有聲書播放功能調整)
+          <div class="mobile-modal-scroll-area">
+            <div v-if="currentMode === 'book'" class="mobile-page-content">
+              <div v-if="processedMobilePages[mobileCurrentPage].image" class="mobile-img-box">
+                <img :src="processedMobilePages[mobileCurrentPage].image" class="mobile-std-img" />
               </div>
-            </transition>
-          </div>
-          <div class="mobile-nav-bar">
-            <button
-              class="nav-btn"
-              @click.stop="prevMobilePage"
-              :disabled="mobileCurrentPage === 0"
-            >
-              ❮ 上一頁
-            </button>
-<<<<<<< HEAD
-            <span class="nav-info">{{
-              mobileCurrentPage === 0
-                ? "封面"
-                : mobileCurrentPage === processedMobilePages.length - 1
-                  ? "封底"
-                  : `第 ${mobileCurrentPage} 頁`
-            }}</span>
-=======
-            <span class="nav-info">
-              {{
-                mobileCurrentPage === 0
-                  ? "封面"
-                  : mobileCurrentPage === processedMobilePages.length - 1
-                    ? "封底"
-                    : `${mobileCurrentPage} / ${processedMobilePages.length - 2}`
-              }}
-            </span>
->>>>>>> 42c9988 (有聲書播放功能調整)
-            <button
-              class="nav-btn"
-              @click.stop="nextMobilePage"
-              :disabled="mobileCurrentPage === processedMobilePages.length - 1"
-            >
-              下一頁 ❯
-            </button>
+              <div
+                class="mobile-text-box"
+                v-html="processedMobilePages[mobileCurrentPage].text"
+              ></div>
+            </div>
+            <div v-else class="mobile-slideshow-box" style="padding: 20px">
+              <img
+                :src="slideshowData.slides[currentSlideIndex]?.image"
+                class="mobile-slide-img"
+                style="max-width: 100%; border: 3px solid #fff"
+              />
+              <p
+                class="mobile-slide-text"
+                style="text-align: center; font-size: 1.2rem; margin-top: 20px"
+                v-html="slideshowData.slides[currentSlideIndex]?.text"
+              ></p>
+              <input
+                type="range"
+                class="slide-range"
+                min="0"
+                :max="slideshowData.slides.length > 0 ? slideshowData.slides.length - 1 : 0"
+                v-model.number="currentSlideIndex"
+                @input="onSlideSeek"
+                style="width: 100%; margin-top: 30px"
+              />
+            </div>
           </div>
         </div>
       </transition>
     </div>
-    <audio ref="audioRef" @ended="isPlaying = false"></audio>
+
+    <audio ref="audioRef" @ended="isPlaying = false" @timeupdate="onAudioTimeUpdate"></audio>
   </div>
 </template>
 
 <style scoped>
-/* CSS 完全保持您原本的設定，不作任何變動 */
+/* =========================================
+   照片回顧幻燈片樣式 (⭐ 支援彈性高度)
+   ========================================= */
+.slideshow-stage {
+  width: 946px;
+  min-height: 675px; /* ⭐ 改為 min-height，讓它能長高 */
+  height: auto; /* ⭐ 允許高度依內容彈性變化 */
+  background: #1a1a1a;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+.slide-card {
+  flex-grow: 1; /* ⭐ 允許卡片隨文字撐高 */
+  display: flex;
+  flex-direction: column;
+  padding: 20px 30px 15px 30px;
+}
+.slide-img-box {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 15px;
+}
+.slide-main-img {
+  max-width: 100%;
+  max-height: 480px; /* ⭐ 設定圖片最高限制，保留空間給文字 */
+  object-fit: contain;
+  border: 4px solid #fff;
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.5);
+}
+.slide-caption {
+  color: white;
+  text-align: center;
+  padding: 10px 20px;
+  font-size: 1.35rem;
+  line-height: 1.6;
+  /* ⭐ 移除 flex: 1 與 display: flex，讓文字自然排版並撐開高度 */
+}
+
+/* 可拖拉進度條樣式 */
+.slideshow-progress-wrapper {
+  width: 100%;
+  background: #333;
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+}
+.slide-range {
+  width: 100%;
+  height: 6px;
+  -webkit-appearance: none;
+  background: #555;
+  outline: none;
+  cursor: pointer;
+  margin: 0;
+  border-radius: 3px;
+}
+.slide-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #ff8000;
+  cursor: pointer;
+  box-shadow: 0 0 5px rgba(0, 0, 0, 0.5);
+  transition: transform 0.1s;
+}
+.slide-range::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+}
+.slide-range::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #ff8000;
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 0 5px rgba(0, 0, 0, 0.5);
+}
+
+.end-page-box {
+  position: relative;
+  cursor: pointer;
+}
+.slideshow-jump-hint {
+  position: absolute;
+  bottom: 30px;
+  right: 30px;
+  background: #ff8000;
+  color: white;
+  padding: 8px 15px;
+  border-radius: 20px;
+  font-weight: bold;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+  transition: transform 0.2s;
+}
+.end-page-box:hover .slideshow-jump-hint {
+  transform: scale(1.05);
+}
+
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.6s ease;
+}
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
+/* =========================================
+   繪本樣式與全局佈局
+   ========================================= */
 .media-experience-container {
   width: 100%;
   max-width: 1100px;
@@ -499,9 +534,6 @@ onUnmounted(() => {
   overflow: hidden;
   font-family: "Times New Roman", "DFKai-SB", serif;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
-}
-.mobile-wrapper {
-  width: 100%;
 }
 .desktop-wrapper .control-bar {
   display: flex;
@@ -550,6 +582,11 @@ onUnmounted(() => {
   border: 1px solid #666;
   padding: 5px 12px;
   border-radius: 20px;
+  transition: all 0.2s;
+}
+.mode-label:hover {
+  color: white;
+  border-color: white;
 }
 .book-scene-container {
   min-height: 750px;
@@ -576,10 +613,6 @@ onUnmounted(() => {
   justify-content: space-between;
   padding: 25px;
 }
-.page-cover {
-  background-color: #eee;
-  border: 1px solid #999;
-}
 .cover-layout {
   padding: 0;
   justify-content: center;
@@ -587,6 +620,7 @@ onUnmounted(() => {
   width: 100%;
   height: 100%;
   display: flex;
+  position: relative;
 }
 .cover-img-full {
   width: 100%;
@@ -605,18 +639,8 @@ onUnmounted(() => {
   max-width: 100%;
   max-height: 100%;
   object-fit: contain;
-  filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.1));
 }
-.role-image {
-  max-width: 90%;
-  max-height: 90%;
-  object-fit: contain;
-  border: 10px solid white;
-  box-shadow: 5px 5px 15px rgba(0, 0, 0, 0.2);
-  transform: rotate(-2deg);
-  display: block;
-  margin: 0 auto;
-}
+
 .page-text-area {
   flex: 2;
   font-size: 1.15rem;
@@ -626,25 +650,12 @@ onUnmounted(() => {
   padding: 0 5px;
   display: flex;
   flex-direction: column;
-  justify-content: flex-start;
-}
-.page-text-area.text-only {
-  flex: 1;
   justify-content: center;
-  padding: 25px;
 }
 .text-content {
   text-align: justify;
 }
-.back-cover-placeholder {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  height: 100%;
-  background: #444;
-  color: white;
-}
+
 :deep(h2),
 :deep(h3) {
   text-align: center;
@@ -655,25 +666,10 @@ onUnmounted(() => {
   font-weight: bold;
   font-family: "DFKai-SB", serif;
   line-height: 1.2;
+  width: 100%;
+  display: block;
 }
-:deep(b) {
-  font-weight: bold;
-  color: #000;
-}
-.page-number {
-  position: absolute;
-  bottom: 15px;
-  font-size: 0.85rem;
-  color: #999;
-}
-.num-left {
-  left: 25px;
-  right: auto;
-}
-.num-right {
-  right: 25px;
-  left: auto;
-}
+
 .nav-arrow {
   position: absolute;
   top: 50%;
@@ -687,7 +683,6 @@ onUnmounted(() => {
 }
 .nav-arrow:hover {
   color: rgba(0, 0, 0, 0.5);
-  transform: translateY(-50%) scale(1.1);
 }
 .nav-arrow.left {
   left: 20px;
@@ -699,197 +694,5 @@ onUnmounted(() => {
   margin-top: 15px;
   color: #777;
   font-size: 1rem;
-}
-.mobile-preview-card {
-  background: #fff;
-  border-radius: 12px;
-  overflow: hidden;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
-  margin: 20px;
-  cursor: pointer;
-  text-align: center;
-  border: 1px solid #eee;
-}
-.preview-cover-box {
-  position: relative;
-  width: 100%;
-  height: 300px;
-  background: #f0f0f0;
-}
-.preview-cover-img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-.play-overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(0, 0, 0, 0.3);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  color: white;
-  opacity: 0.8;
-  transition: opacity 0.3s;
-}
-.play-icon {
-  font-size: 3rem;
-  margin-bottom: 10px;
-}
-.play-text {
-  font-size: 1.2rem;
-  font-weight: bold;
-  letter-spacing: 1px;
-}
-.preview-info {
-  padding: 15px;
-}
-.preview-info h3 {
-  margin: 0 0 5px 0;
-  color: #333;
-}
-.preview-info p {
-  margin: 0;
-  color: #777;
-  font-size: 0.9rem;
-}
-.mobile-modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  background: #fff;
-  z-index: 9999;
-  display: flex;
-  flex-direction: column;
-}
-.mobile-header-bar {
-  height: 60px;
-  background: #333;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 15px;
-  flex-shrink: 0;
-  color: white;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-}
-.mobile-audio-controls {
-  display: flex;
-  gap: 10px;
-}
-.close-btn {
-  background: none;
-  border: none;
-  color: white;
-  font-size: 1.5rem;
-  cursor: pointer;
-  padding: 5px 10px;
-}
-.mobile-modal-scroll-area {
-  flex: 1;
-  overflow-y: auto;
-  background: #fff;
-  position: relative;
-  -webkit-overflow-scrolling: touch;
-}
-.mobile-page-content {
-  min-height: 100%;
-  padding: 30px 20px 40px 20px;
-  display: flex;
-  flex-direction: column;
-  box-sizing: border-box;
-}
-.mobile-img-box {
-  width: 100%;
-  display: flex;
-  justify-content: center;
-  margin-bottom: 25px;
-}
-.mobile-std-img {
-  max-width: 100%;
-  height: auto;
-  border-radius: 4px;
-}
-.mobile-role-img {
-  max-width: 90%;
-  height: auto;
-  border: 8px solid white;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
-  transform: rotate(-1deg);
-}
-.mobile-text-box {
-  font-size: 1.25rem;
-  line-height: 1.8;
-  color: #333;
-  text-align: justify;
-  flex-grow: 1;
-}
-.mobile-page-num {
-  text-align: center;
-  color: #999;
-  font-size: 0.9rem;
-  margin-top: 40px;
-}
-.mobile-nav-bar {
-  height: 70px;
-  background: #f9f9f9;
-  border-top: 1px solid #ddd;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 15px;
-  flex-shrink: 0;
-}
-.nav-btn {
-  background: white;
-  border: 1px solid #ddd;
-  color: #333;
-  padding: 10px 20px;
-  border-radius: 25px;
-  font-size: 1rem;
-  cursor: pointer;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
-}
-.nav-btn:disabled {
-  color: #ccc;
-  border-color: #eee;
-  box-shadow: none;
-}
-.nav-info {
-  color: #666;
-  font-size: 0.9rem;
-}
-.fade-modal-enter-active,
-.fade-modal-leave-active {
-  transition: opacity 0.3s;
-}
-.fade-modal-enter-from,
-.fade-modal-leave-to {
-  opacity: 0;
-}
-.slide-fade-enter-active,
-.slide-fade-leave-active {
-  transition: all 0.25s ease;
-}
-.slide-fade-enter-from {
-  opacity: 0;
-  transform: translateX(10px);
-}
-.slide-fade-leave-to {
-  opacity: 0;
-  transform: translateX(-10px);
-}
-@media (max-width: 1100px) {
-  .media-experience-container {
-    background: transparent;
-    box-shadow: none;
-    max-width: 100%;
-  }
 }
 </style>

@@ -113,7 +113,7 @@ watch(
 );
 
 const specialComponentsMap = {
-  "7-6他們是誰": defineAsyncComponent(
+  "7-6 In 是 Siáng？（他們是誰？）": defineAsyncComponent(
     () => import("../components/feature_articles/Article7_6.vue"),
   ),
 };
@@ -165,6 +165,7 @@ const formatTextWithFootnote = (text) => {
   });
 };
 
+// 1. 單純處理正文（不包含註釋）
 const htmlContent = computed(() => {
   if (!article.value || !article.value.content) return "";
   let fullText = article.value.content;
@@ -193,27 +194,30 @@ const htmlContent = computed(() => {
     return match;
   });
 
-  if (article.value.footnotes && article.value.footnotes.length > 0) {
-    const listItems = article.value.footnotes
-      .map((note) => {
-        return `<li id="footnote-${note.id}">
-          <p>
-            ${note.text}
-            <a href="#footnote-ref-${note.id}" class="footnote-backref">↩</a>
-          </p>
-        </li>`;
-      })
-      .join("");
+  return parsedHtml; // ⭐ 把原本這裡黏貼 footnotes 的邏輯拿掉了
+});
 
-    parsedHtml += `
-      <div class="footnotes">
-        <hr />
-        <ol>${listItems}</ol>
-      </div>
-    `;
-  }
+// 2. 獨立處理註釋區塊
+const footnotesHtml = computed(() => {
+  if (!article.value || !article.value.footnotes || article.value.footnotes.length === 0) return "";
 
-  return parsedHtml;
+  const listItems = article.value.footnotes
+    .map((note) => {
+      return `<li id="footnote-${note.id}">
+        <p>
+          ${note.text}
+          <a href="#footnote-ref-${note.id}" class="footnote-backref">↩</a>
+        </p>
+      </li>`;
+    })
+    .join("");
+
+  return `
+    <div class="footnotes">
+      <hr />
+      <ol>${listItems}</ol>
+    </div>
+  `;
 });
 
 const keywordContent = computed(() => {
@@ -295,23 +299,22 @@ const issueLinkParams = computed(() => {
       </div>
 
       <div v-if="article.type === 'special' && currentSpecialComponent">
-<<<<<<< HEAD
-=======
         <div v-if="article.keyword" class="keyword-section" v-html="keywordContent"></div>
->>>>>>> 42c9988 (有聲書播放功能調整)
         <div v-if="htmlContent" class="audiobook-intro">
           <div class="markdown-body" v-html="htmlContent"></div>
         </div>
 
         <component :is="currentSpecialComponent" :article="article" />
+
+        <div v-if="footnotesHtml" class="markdown-body" v-html="footnotesHtml"></div>
       </div>
 
       <article v-else class="article-content">
         <div v-if="article.keyword" class="keyword-section" v-html="keywordContent"></div>
         <br />
         <div class="markdown-body" v-html="htmlContent"></div>
+        <div v-if="footnotesHtml" class="markdown-body" v-html="footnotesHtml"></div>
       </article>
-
       <div class="article-navigation">
         <div class="nav-item">
           <template v-if="article.prev">
