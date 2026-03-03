@@ -20,7 +20,6 @@ const allPages = computed(() => bookData.value.pages || []);
 const currentMode = ref("book");
 const currentSlideIndex = ref(0);
 
-// 切換模式
 const toggleMode = () => {
   audioRef.value?.pause();
   isPlaying.value = false;
@@ -29,7 +28,6 @@ const toggleMode = () => {
     currentMode.value = "slideshow";
     currentSlideIndex.value = 0;
 
-    // 載入長音樂並從 0 秒開始自動播放
     if (audioRef.value && slideshowData.value.audio) {
       audioRef.value.src = slideshowData.value.audio;
       audioRef.value.currentTime = 0;
@@ -39,7 +37,7 @@ const toggleMode = () => {
           isPlaying.value = true;
         })
         .catch((e) => {
-          console.warn("自動播放受瀏覽器限制，請手動點擊播放:", e);
+          console.warn("自動播放受限制，請手動點擊播放:", e);
           isPlaying.value = false;
         });
     }
@@ -129,7 +127,7 @@ const onVolumeChange = () => {
 };
 
 // ==========================================
-// 3. PageFlip (繪本模式)
+// 3. PageFlip (電腦版繪本模式)
 // ==========================================
 let pageFlip = null;
 const bookContainer = ref(null);
@@ -195,6 +193,44 @@ const processedMobilePages = computed(() => {
     }
   }
   return result;
+});
+
+// 手機版滑動偵測
+const touchStartX = ref(0);
+const touchEndX = ref(0);
+const minSwipeDistance = 50;
+
+const onTouchStart = (e) => {
+  touchStartX.value = e.changedTouches[0].screenX;
+};
+const onTouchEnd = (e) => {
+  touchEndX.value = e.changedTouches[0].screenX;
+  const distance = touchEndX.value - touchStartX.value;
+  if (Math.abs(distance) < minSwipeDistance) return;
+  distance > 0 ? prevMobilePage() : nextMobilePage();
+};
+
+const nextMobilePage = () => {
+  if (mobileCurrentPage.value < processedMobilePages.value.length - 1) {
+    mobileCurrentPage.value++;
+    const modalContent = document.querySelector(".mobile-modal-scroll-area");
+    if (modalContent) modalContent.scrollTo({ top: 0, behavior: "smooth" });
+  }
+};
+
+const prevMobilePage = () => {
+  if (mobileCurrentPage.value > 0) {
+    mobileCurrentPage.value--;
+    const modalContent = document.querySelector(".mobile-modal-scroll-area");
+    if (modalContent) modalContent.scrollTo({ top: 0, behavior: "smooth" });
+  }
+};
+
+// 監聽手機版翻頁播放音效
+watch(mobileCurrentPage, (newIdx) => {
+  if (isMobile.value && showMobileModal.value && currentMode.value === "book") {
+    playPageAudio(processedMobilePages.value[newIdx]?.audio);
+  }
 });
 
 const openMobileReader = () => {
@@ -287,14 +323,25 @@ onUnmounted(() => {
             </div>
             <div v-for="(page, index) in interiorPages" :key="index" class="page">
               <div class="page-content interior-page">
-                <div class="page-image-area" v-if="page.image">
+                <div
+                  class="page-image-area"
+                  v-if="page.image"
+                  :class="{ 'has-role-img': page.imageClass === 'role-image' }"
+                >
                   <img
                     :src="page.image"
                     :class="page.imageClass ? page.imageClass : 'page-img'"
                     loading="lazy"
                   />
                 </div>
-                <div class="page-text-area" v-if="page.text" :class="{ 'text-only': !page.image }">
+                <div
+                  class="page-text-area"
+                  v-if="page.text"
+                  :class="[
+                    { 'text-only': !page.image },
+                    page.imageClass === 'role-image' ? 'role-text' : '',
+                  ]"
+                >
                   <div v-html="page.text" class="text-content"></div>
                 </div>
               </div>
@@ -347,58 +394,131 @@ onUnmounted(() => {
         <div class="preview-cover-box">
           <img v-if="allPages.length > 0" :src="allPages[0].image" class="preview-cover-img" />
           <div class="play-overlay">
-            <span class="play-text"
-              >點擊開始：{{ currentMode === "book" ? "有聲繪本" : "照片回顧" }}</span
-            >
+            <span class="play-icon">📖</span>
+            <span class="play-text">點擊展開</span>
           </div>
         </div>
       </div>
+
       <transition name="fade-modal">
         <div v-if="showMobileModal" class="mobile-modal-overlay">
           <div class="mobile-header-bar">
             <div class="mobile-audio-controls">
               <button class="icon-btn" @click="togglePlay">{{ isPlaying ? "⏸" : "▶" }}</button>
-              <button
-                class="mode-label small"
-                @click="toggleMode"
-                style="background: #555; border: 1px solid #777; font-size: 0.8rem"
-              >
-                切換模式
-              </button>
+
+              <div class="volume-control-group">
+                <button class="icon-btn" @click="toggleMute">
+                  {{ isMuted || volume === 0 ? "🔇" : volume < 0.5 ? "🔉" : "🔊" }}
+                </button>
+                <div class="volume-slider-wrapper">
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.01"
+                    v-model.number="volume"
+                    @input="onVolumeChange"
+                    class="volume-range"
+                  />
+                </div>
+              </div>
+
+              <span class="mode-label small-mode-btn" @click="toggleMode">
+                {{ currentMode === "book" ? "📸 照片回顧" : "📖 有聲繪本" }}
+              </span>
             </div>
+
             <button class="close-btn" @click="closeMobileReader">✕</button>
           </div>
+
           <div class="mobile-modal-scroll-area">
-            <div v-if="currentMode === 'book'" class="mobile-page-content">
-              <div v-if="processedMobilePages[mobileCurrentPage].image" class="mobile-img-box">
-                <img :src="processedMobilePages[mobileCurrentPage].image" class="mobile-std-img" />
-              </div>
+            <transition name="slide-fade" mode="out-in">
               <div
-                class="mobile-text-box"
-                v-html="processedMobilePages[mobileCurrentPage].text"
-              ></div>
-            </div>
-            <div v-else class="mobile-slideshow-box" style="padding: 20px">
-              <img
-                :src="slideshowData.slides[currentSlideIndex]?.image"
-                class="mobile-slide-img"
-                style="max-width: 100%; border: 3px solid #fff"
-              />
-              <p
-                class="mobile-slide-text"
-                style="text-align: center; font-size: 1.2rem; margin-top: 20px"
-                v-html="slideshowData.slides[currentSlideIndex]?.text"
-              ></p>
-              <input
-                type="range"
-                class="slide-range"
-                min="0"
-                :max="slideshowData.slides.length > 0 ? slideshowData.slides.length - 1 : 0"
-                v-model.number="currentSlideIndex"
-                @input="onSlideSeek"
-                style="width: 100%; margin-top: 30px"
-              />
-            </div>
+                v-if="currentMode === 'book'"
+                :key="'book-' + mobileCurrentPage"
+                class="mobile-page-content"
+                @touchstart="onTouchStart"
+                @touchend="onTouchEnd"
+              >
+                <div
+                  v-if="processedMobilePages[mobileCurrentPage].image"
+                  class="mobile-img-box"
+                  :class="{
+                    'has-role-img':
+                      processedMobilePages[mobileCurrentPage].imageClass === 'role-image',
+                  }"
+                >
+                  <img
+                    :src="processedMobilePages[mobileCurrentPage].image"
+                    :class="
+                      processedMobilePages[mobileCurrentPage].imageClass === 'role-image'
+                        ? 'mobile-role-img'
+                        : 'mobile-std-img'
+                    "
+                  />
+                </div>
+                <div
+                  class="mobile-text-box"
+                  :class="{
+                    'role-text':
+                      processedMobilePages[mobileCurrentPage].imageClass === 'role-image',
+                  }"
+                  v-html="processedMobilePages[mobileCurrentPage].text"
+                ></div>
+              </div>
+            </transition>
+
+            <transition name="fade" mode="out-in">
+              <div
+                v-if="currentMode === 'slideshow'"
+                :key="'slide-' + currentSlideIndex"
+                class="mobile-slideshow-box"
+              >
+                <img
+                  :src="slideshowData.slides[currentSlideIndex]?.image"
+                  class="mobile-slide-img"
+                />
+                <p
+                  class="mobile-slide-text"
+                  v-html="slideshowData.slides[currentSlideIndex]?.text"
+                ></p>
+                <input
+                  type="range"
+                  class="slide-range"
+                  min="0"
+                  :max="slideshowData.slides.length > 0 ? slideshowData.slides.length - 1 : 0"
+                  v-model.number="currentSlideIndex"
+                  @input="onSlideSeek"
+                  style="width: 100%; margin-top: 30px"
+                />
+              </div>
+            </transition>
+          </div>
+
+          <div class="mobile-nav-bar" v-if="currentMode === 'book'">
+            <button
+              class="nav-btn prev"
+              @click.stop="prevMobilePage"
+              :disabled="mobileCurrentPage === 0"
+            >
+              ❮ 上一頁
+            </button>
+            <span class="nav-info">
+              {{
+                mobileCurrentPage === 0
+                  ? "封面"
+                  : mobileCurrentPage === processedMobilePages.length - 1
+                    ? "封底"
+                    : `${mobileCurrentPage} / ${processedMobilePages.length - 2}`
+              }}
+            </span>
+            <button
+              class="nav-btn next"
+              @click.stop="nextMobilePage"
+              :disabled="mobileCurrentPage === processedMobilePages.length - 1"
+            >
+              下一頁 ❯
+            </button>
           </div>
         </div>
       </transition>
@@ -410,12 +530,12 @@ onUnmounted(() => {
 
 <style scoped>
 /* =========================================
-   照片回顧幻燈片樣式 (⭐ 支援彈性高度)
+   照片回顧幻燈片樣式
    ========================================= */
 .slideshow-stage {
   width: 946px;
-  min-height: 675px; /* ⭐ 改為 min-height，讓它能長高 */
-  height: auto; /* ⭐ 允許高度依內容彈性變化 */
+  min-height: 675px;
+  height: auto;
   background: #1a1a1a;
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
   display: flex;
@@ -423,7 +543,7 @@ onUnmounted(() => {
   position: relative;
 }
 .slide-card {
-  flex-grow: 1; /* ⭐ 允許卡片隨文字撐高 */
+  flex-grow: 1;
   display: flex;
   flex-direction: column;
   padding: 20px 30px 15px 30px;
@@ -436,7 +556,7 @@ onUnmounted(() => {
 }
 .slide-main-img {
   max-width: 100%;
-  max-height: 480px; /* ⭐ 設定圖片最高限制，保留空間給文字 */
+  max-height: 480px;
   object-fit: contain;
   border: 4px solid #fff;
   box-shadow: 0 8px 25px rgba(0, 0, 0, 0.5);
@@ -447,10 +567,7 @@ onUnmounted(() => {
   padding: 10px 20px;
   font-size: 1.35rem;
   line-height: 1.6;
-  /* ⭐ 移除 flex: 1 與 display: flex，讓文字自然排版並撐開高度 */
 }
-
-/* 可拖拉進度條樣式 */
 .slideshow-progress-wrapper {
   width: 100%;
   background: #333;
@@ -458,6 +575,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
 }
+
 .slide-range {
   width: 100%;
   height: 6px;
@@ -511,7 +629,6 @@ onUnmounted(() => {
 .end-page-box:hover .slideshow-jump-hint {
   transform: scale(1.05);
 }
-
 .fade-enter-active,
 .fade-leave-active {
   transition: opacity 0.6s ease;
@@ -522,7 +639,7 @@ onUnmounted(() => {
 }
 
 /* =========================================
-   繪本樣式與全局佈局
+   繪本樣式與全局佈局 (電腦版)
    ========================================= */
 .media-experience-container {
   width: 100%;
@@ -635,10 +752,24 @@ onUnmounted(() => {
   overflow: hidden;
   margin-bottom: 20px;
 }
+.page-image-area.has-role-img {
+  margin-bottom: 0px;
+}
 .page-img {
   max-width: 100%;
   max-height: 100%;
   object-fit: contain;
+}
+
+.role-image {
+  max-width: 80%;
+  max-height: 80%;
+  object-fit: contain;
+  border: 10px solid white;
+  box-shadow: 4px 6px 15px rgba(0, 0, 0, 0.25);
+  transform: rotate(-3deg);
+  display: block;
+  margin: 0 auto;
 }
 
 .page-text-area {
@@ -651,6 +782,9 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   justify-content: center;
+}
+.page-text-area.role-text {
+  justify-content: flex-start;
 }
 .text-content {
   text-align: justify;
@@ -669,7 +803,6 @@ onUnmounted(() => {
   width: 100%;
   display: block;
 }
-
 .nav-arrow {
   position: absolute;
   top: 50%;
@@ -694,5 +827,237 @@ onUnmounted(() => {
   margin-top: 15px;
   color: #777;
   font-size: 1rem;
+}
+
+/* =========================================
+   手機版專屬樣式
+   ========================================= */
+.mobile-wrapper {
+  width: 100%;
+}
+
+/* 手機版一開始的預覽卡片 (僅顯示封面) */
+.mobile-preview-card {
+  background: #fff;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
+  margin: 20px auto;
+  max-width: 320px;
+  cursor: pointer;
+  border: 1px solid #ddd;
+}
+.preview-cover-box {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  background: #f0f0f0;
+}
+.preview-cover-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.play-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  opacity: 0.9;
+  transition: opacity 0.3s;
+}
+.play-icon {
+  font-size: 3rem;
+  margin-bottom: 10px;
+}
+.play-text {
+  font-size: 1.2rem;
+  font-weight: bold;
+  letter-spacing: 1px;
+}
+
+/* 全螢幕彈窗 */
+.mobile-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: #fdfdfd;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+}
+.mobile-header-bar {
+  height: 60px;
+  background: #333;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 15px;
+  flex-shrink: 0;
+  color: white;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+}
+.mobile-audio-controls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+/* ⭐ 手機版切換按鈕的專屬 CSS */
+.small-mode-btn {
+  cursor: pointer;
+  background: #555;
+  border: 1px solid #777;
+  font-size: 0.8rem;
+  padding: 4px 8px;
+  margin-left: 5px;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  color: white;
+  font-size: 1.5rem;
+  cursor: pointer;
+  padding: 5px 10px;
+}
+
+/* 內容區 */
+.mobile-modal-scroll-area {
+  flex: 1;
+  overflow-x: hidden;
+  overflow-y: auto;
+  position: relative;
+  -webkit-overflow-scrolling: touch;
+}
+.mobile-page-content {
+  min-height: 100%;
+  padding: 30px 20px 40px 20px;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+}
+
+/* 手機版圖片 */
+.mobile-img-box {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 25px;
+}
+.mobile-img-box.has-role-img {
+  margin-bottom: 10px;
+}
+.mobile-std-img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 4px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+.mobile-role-img {
+  max-width: 85%;
+  height: auto;
+  border: 8px solid white;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+  transform: rotate(-2deg);
+  display: block;
+  margin: 0 auto;
+}
+
+/* 手機版文字 */
+.mobile-text-box {
+  font-size: 1.2rem;
+  line-height: 1.8;
+  color: #333;
+  text-align: justify;
+  flex-grow: 1;
+}
+.mobile-text-box.role-text {
+  margin-top: 10px;
+}
+
+/* 手機版幻燈片 */
+.mobile-slideshow-box {
+  padding: 30px 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.mobile-slide-img {
+  max-width: 100%;
+  border: 3px solid #fff;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+.mobile-slide-text {
+  text-align: center;
+  font-size: 1.2rem;
+  margin-top: 20px;
+  color: #333;
+  line-height: 1.6;
+}
+
+/* 底部導覽列 (僅繪本模式) */
+.mobile-nav-bar {
+  height: 70px;
+  background: #f9f9f9;
+  border-top: 1px solid #ddd;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 15px;
+  flex-shrink: 0;
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);
+}
+.nav-btn {
+  background: white;
+  border: 1px solid #ddd;
+  color: #333;
+  padding: 8px 15px;
+  border-radius: 20px;
+  font-size: 0.95rem;
+  cursor: pointer;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+}
+.nav-btn:disabled {
+  color: #ccc;
+  border-color: #eee;
+  box-shadow: none;
+}
+.nav-info {
+  color: #666;
+  font-size: 0.9rem;
+  font-weight: bold;
+}
+
+/* 翻頁動畫 */
+.slide-fade-enter-active,
+.slide-fade-leave-active {
+  transition: all 0.3s ease;
+}
+.slide-fade-enter-from {
+  opacity: 0;
+  transform: translateX(20px);
+}
+.slide-fade-leave-to {
+  opacity: 0;
+  transform: translateX(-20px);
+}
+
+.fade-modal-enter-active,
+.fade-modal-leave-active {
+  transition: opacity 0.3s;
+}
+.fade-modal-enter-from,
+.fade-modal-leave-to {
+  opacity: 0;
 }
 </style>
