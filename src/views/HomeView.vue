@@ -4,7 +4,7 @@ import { useRoute, useRouter } from "vue-router";
 import { supabase } from "../supabase";
 import MainLayout from "../components/MainLayout.vue";
 import { useEditorMode } from "../composables/useEditorMode";
-import { authors } from "../data/authors.js";
+// ⭐ 已經移除本地端的 import { authors } from "../data/authors.js";
 
 const route = useRoute();
 const router = useRouter();
@@ -17,12 +17,26 @@ const articleSummaries = ref({});
 const hotKeywords = ref([]);
 const loading = ref(true);
 
-// ⭐ 新增：後台選單綁定變數
+// 後台選單綁定變數
 const adminSelectedIssue = ref("");
 
 const searchQuery = ref("");
 const searchType = ref("title");
 const emailTooltip = ref("點擊複製 Email");
+
+// ⭐ 新增：存放從資料庫抓回來的作者清單
+const dbAuthors = ref([]);
+
+// ⭐ 新增：從 Supabase 抓取作者資料的函式
+const fetchAuthors = async () => {
+  const { data, error } = await supabase.from("authors").select("*").eq("is_published", true); // 只抓取公開的作者
+
+  if (!error && data) {
+    dbAuthors.value = data;
+  } else if (error) {
+    console.error("載入作者失敗:", error);
+  }
+};
 
 const extractCurrentKeywords = () => {
   if (!currentIssueContent.value.length) return;
@@ -74,7 +88,6 @@ const loadTargetIssue = async () => {
 
   if (target) {
     let artQuery = supabase.from("articles").select("*").eq("issue", target.id);
-    // 這裡先不用資料庫排序，因為資料庫是字串排序，我們改用前端排序
 
     if (!isEditor.value) {
       artQuery = artQuery.eq("is_published", true);
@@ -83,8 +96,7 @@ const loadTargetIssue = async () => {
     const { data: articles, error } = await artQuery;
 
     if (!error && articles) {
-      // ⭐ 關鍵修改：自然排序邏輯 (Natural Sort)
-      // 這會讓 "6-2" 排在 "6-10" 前面
+      // 關鍵修改：自然排序邏輯 (Natural Sort)
       articles.sort((a, b) => {
         return a.id.localeCompare(b.id, undefined, { numeric: true, sensitivity: "base" });
       });
@@ -95,7 +107,8 @@ const loadTargetIssue = async () => {
         section: a.section,
         title: a.title,
         subtitle: a.subtitle,
-        author: a.author_display || a.author,
+        author: a.author,
+        authorDisplay: a.author_display || a.author,
         keyword: a.keyword,
         color: getCategoryColor(a.category),
       }));
@@ -110,7 +123,6 @@ const loadTargetIssue = async () => {
 const handleAdminIssueChange = () => {
   if (!adminSelectedIssue.value) return;
 
-  // 判斷目前是否在 /admin 路徑下
   const isAdminPath = route.path.startsWith("/admin");
   const targetPath = isAdminPath
     ? `/admin/home/issue/${adminSelectedIssue.value}`
@@ -201,13 +213,17 @@ const specialFeatures = computed(() => groupArticles("特稿專區"));
 const themePlaza = computed(() => groupArticles("主題廣場"));
 const diverseLectures = computed(() => groupArticles("多元講堂"));
 
+// ⭐ 修改：改用從資料庫抓回來的 dbAuthors.value 進行比對
 const currentIssueAuthors = computed(() => {
   if (!currentIssue.value) return [];
-  if (!authors) return [];
+  if (!dbAuthors.value || dbAuthors.value.length === 0) return []; // 確保資料庫有抓到作者
+
   const appearingNames = [...new Set(currentIssue.value.content.map((a) => a.author))];
-  let filteredAuthors = authors.filter((a) =>
-    appearingNames.some((name) => name && name.includes(a.name))
+
+  let filteredAuthors = dbAuthors.value.filter((a) =>
+    appearingNames.some((name) => name && name.includes(a.name)),
   );
+
   const orderList = currentIssue.value.authorOrder;
   if (orderList && Array.isArray(orderList)) {
     filteredAuthors.sort((a, b) => {
@@ -244,15 +260,16 @@ const copyEmail = () => {
 
 watch(
   () => route.params.issueNumber,
-  () => loadTargetIssue()
+  () => loadTargetIssue(),
 );
 
 watch(isEditor, () => {
   fetchIssues();
 });
 
-onMounted(() => {
+onMounted(async () => {
   document.title = "無境界者雜誌";
+  await fetchAuthors(); // ⭐ 網頁一載入就先去 Supabase 抓作者資料
   fetchIssues();
 });
 </script>
@@ -335,7 +352,7 @@ onMounted(() => {
               <h3>{{ article.title }}</h3>
               <h4 v-if="article.subtitle">──{{ article.subtitle }}</h4>
               <br />
-              <b class="author-name">{{ article.author }}</b>
+              <b class="author-name">{{ article.authorDisplay }}</b>
               <p class="article-summary">{{ articleSummaries[article.routeId] || "..." }}</p>
             </div>
           </router-link>
@@ -358,7 +375,7 @@ onMounted(() => {
               <h3>{{ article.title }}</h3>
               <h4 v-if="article.subtitle">──{{ article.subtitle }}</h4>
               <br />
-              <b class="author-name">{{ article.author }}</b>
+              <b class="author-name">{{ article.authorDisplay }}</b>
               <p class="article-summary">{{ articleSummaries[article.routeId] || "..." }}</p>
             </div>
           </router-link>
@@ -381,7 +398,7 @@ onMounted(() => {
               <h3>{{ article.title }}</h3>
               <h4 v-if="article.subtitle">──{{ article.subtitle }}</h4>
               <br />
-              <b class="author-name">{{ article.author }}</b>
+              <b class="author-name">{{ article.authorDisplay }}</b>
               <p class="article-summary">{{ articleSummaries[article.routeId] || "..." }}</p>
             </div>
           </router-link>
@@ -705,7 +722,9 @@ h2 {
   min-height: 10rem;
   display: flex;
   flex-direction: column;
-  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  transition:
+    transform 0.3s ease,
+    box-shadow 0.3s ease;
 }
 
 .article:hover {
@@ -725,7 +744,9 @@ h2 {
   padding: 0.5rem 1rem;
   border-radius: 5px;
   opacity: 0;
-  transition: opacity 0.3s ease, transform 0.3s ease;
+  transition:
+    opacity 0.3s ease,
+    transform 0.3s ease;
   pointer-events: none;
 }
 
@@ -842,7 +863,9 @@ h2 {
   border-radius: 4px;
   opacity: 0;
   visibility: hidden;
-  transition: opacity 0.3s ease, transform 0.3s ease;
+  transition:
+    opacity 0.3s ease,
+    transform 0.3s ease;
   pointer-events: none;
 }
 .author a:hover::after {
@@ -1019,7 +1042,9 @@ h2 {
   white-space: nowrap;
   opacity: 0;
   visibility: hidden;
-  transition: opacity 0.3s, transform 0.3s;
+  transition:
+    opacity 0.3s,
+    transform 0.3s;
   pointer-events: none;
   font-family: Arial, sans-serif;
   z-index: 10;
