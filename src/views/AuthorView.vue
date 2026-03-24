@@ -1,52 +1,87 @@
 <script setup>
-import { ref, watch, onMounted } from "vue";
-import { useRoute, useRouter } from "vue-router"; // ⭐ 1. 引入 Router
+import { ref, watch, onMounted, computed } from "vue";
+import { useRoute, useRouter } from "vue-router";
 import MainLayout from "../components/MainLayout.vue";
 import { supabase } from "../supabase";
 import { useEditorMode } from "../composables/useEditorMode";
+import { useLanguage } from "../composables/useLanguage";
 
 const { isEditor } = useEditorMode();
-const route = useRoute(); // ⭐ 建立 route 實例
-const useRouterInstance = useRouter(); // ⭐ 建立 router 實例
+const { currentLang } = useLanguage();
+const route = useRoute();
+const useRouterInstance = useRouter();
 
-const selectedYear = ref(2025);
-const yearOptions = [
-  { value: 2026, label: "2026 年專欄作者" },
-  { value: 2025, label: "2025 年專欄作者" },
-];
+const authorTranslations = {
+  "zh-TW": {
+    title: "專欄作者",
+    selectYear: "選擇年份：",
+    opt2026: "2026 年專欄作者",
+    opt2025: "2025 年專欄作者",
+    loading: "正在載入作者資料...",
+    noData: (y) => `尚無 ${y} 年的專欄作者資料，敬請期待。🥺`,
+    hidden: "隱藏中",
+    readMore: "閱讀此作者文章",
+  },
+  en: {
+    title: "Authors",
+    selectYear: "Select Year:",
+    opt2026: "2026 Authors",
+    opt2025: "2025 Authors",
+    loading: "Loading authors...",
+    noData: (y) => `No authors for ${y} yet.🥺`,
+    hidden: "Hidden",
+    readMore: "Read Articles",
+  },
+  ja: {
+    title: "執筆者",
+    selectYear: "年を選択：",
+    opt2026: "2026年 執筆者",
+    opt2025: "2025年 執筆者",
+    loading: "読み込み中...",
+    noData: (y) => `${y}年の執筆者はまだいません。🥺`,
+    hidden: "非表示",
+    readMore: "記事を読む",
+  },
+  ko: {
+    title: "칼럼니스트",
+    selectYear: "연도 선택:",
+    opt2026: "2026년 칼럼니스트",
+    opt2025: "2025년 칼럼니스트",
+    loading: "불러오는 중...",
+    noData: (y) => `${y}년 작성자가 아직 없습니다.🥺`,
+    hidden: "숨김",
+    readMore: "기사 읽기",
+  },
+};
+const t = computed(() => authorTranslations[currentLang.value] || authorTranslations["zh-TW"]);
 
+const yearOptions = computed(() => [
+  { value: 2026, label: t.value.opt2026 },
+  { value: 2025, label: t.value.opt2025 },
+]);
+const selectedYear = ref(2026);
 const allAuthors = ref([]);
 const randomizedAuthors = ref([]);
 const isLoading = ref(true);
 
-// 初始化年份 (優先讀取網址參數)
 const initYear = () => {
   const queryYear = parseInt(route.query.year);
-  // 檢查網址上的年份是否有效
-  if (yearOptions.some((opt) => opt.value === queryYear)) {
-    selectedYear.value = queryYear;
-  }
+  if (yearOptions.value.some((opt) => opt.value === queryYear)) selectedYear.value = queryYear;
 };
 
 const fetchAuthors = async () => {
   try {
     isLoading.value = true;
     let query = supabase.from("authors").select("*").order("id", { ascending: true });
-
-    if (!isEditor.value) {
-      query = query.eq("is_published", true);
-    }
-
+    if (!isEditor.value) query = query.eq("is_published", true);
     const { data, error } = await query;
-
     if (error) throw error;
-
     if (data) {
       allAuthors.value = data;
       updateAuthors();
     }
   } catch (error) {
-    console.error("Error fetching authors:", error.message);
+    console.error("Error:", error.message);
   } finally {
     isLoading.value = false;
   }
@@ -62,19 +97,27 @@ const updateAuthors = () => {
   randomizedAuthors.value = newArr;
 };
 
-// 監聽年份改變 -> 更新網址 & 更新列表
+// ⭐ 動態計算當前語系的作者名稱與簡介
+const displayAuthors = computed(() => {
+  const langKey = currentLang.value === "default" ? "zh_TW" : currentLang.value.replace("-", "_");
+  return randomizedAuthors.value.map((a) => {
+    const trans = a.translations?.[langKey] || {};
+    return {
+      ...a,
+      displayName: trans.name || a.name,
+      displayBio: trans.bio || a.bio,
+    };
+  });
+});
+
 watch(selectedYear, (newVal) => {
-  useRouterInstance.replace({ query: { ...route.query, year: newVal } }); // ⭐ 更新網址
+  useRouterInstance.replace({ query: { ...route.query, year: newVal } });
   updateAuthors();
 });
-
-watch(isEditor, () => {
-  fetchAuthors();
-});
-
+watch(isEditor, fetchAuthors);
 onMounted(() => {
   document.title = "專欄作者 - 無境界者雜誌";
-  initYear(); // ⭐ 初始化年份
+  initYear();
   fetchAuthors();
 });
 </script>
@@ -83,13 +126,11 @@ onMounted(() => {
   <MainLayout>
     <div class="authors-page">
       <h1 class="page-main-title">
-        <span class="emoji">✍️</span>專欄作者<span class="emoji">✍️</span>
+        <span class="emoji">✍️</span>{{ t.title }}<span class="emoji">✍️</span>
       </h1>
-
       <div class="main-divider"></div>
-
       <div class="year-selector-wrapper">
-        <label for="year-select">選擇年份：</label>
+        <label for="year-select">{{ t.selectYear }}</label>
         <div class="custom-select">
           <select id="year-select" v-model="selectedYear">
             <option v-for="item in yearOptions" :key="item.value" :value="item.value">
@@ -99,34 +140,27 @@ onMounted(() => {
           <span class="arrow">▼</span>
         </div>
       </div>
-
       <div v-if="isLoading" class="loading-state">
-        <p>正在載入作者資料...</p>
+        <p>{{ t.loading }}</p>
       </div>
-
-      <div v-else-if="randomizedAuthors.length === 0" class="no-data">
-        <p>尚無 {{ selectedYear }} 年的專欄作者資料，敬請期待。🥺</p>
+      <div v-else-if="displayAuthors.length === 0" class="no-data">
+        <p>{{ t.noData(selectedYear) }}</p>
       </div>
-
       <div v-else class="authors-list">
-        <div v-for="author in randomizedAuthors" :key="author.id" class="author-box">
-          <div v-if="isEditor && !author.is_published" class="draft-badge">隱藏中</div>
-
+        <div v-for="author in displayAuthors" :key="author.id" class="author-box">
+          <div v-if="isEditor && !author.is_published" class="draft-badge">{{ t.hidden }}</div>
           <div class="author-info">
             <div
               class="author-image"
               :style="{ backgroundImage: `url(${author.author_image})` }"
-              role="img"
-              :aria-label="author.name"
             ></div>
-            <h2>{{ author.name }}</h2>
+            <h2>{{ author.displayName }}</h2>
           </div>
-
           <div class="author-bio">
-            <p>{{ author.bio }}</p>
-            <router-link :to="`/authors/${author.name}`" class="read-more-btn">
-              閱讀此作者文章
-            </router-link>
+            <p>{{ author.displayBio }}</p>
+            <router-link :to="`/authors/${author.name}`" class="read-more-btn">{{
+              t.readMore
+            }}</router-link>
           </div>
         </div>
       </div>
@@ -158,7 +192,9 @@ onMounted(() => {
   border-radius: 10px;
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
   max-width: 900px;
-  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  transition:
+    transform 0.3s ease,
+    box-shadow 0.3s ease;
   position: relative;
 }
 .author-box:hover {

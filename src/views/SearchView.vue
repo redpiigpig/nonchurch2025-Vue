@@ -1,75 +1,166 @@
 <script setup>
-import { ref, onMounted, watch } from "vue";
+import { ref, onMounted, watch, computed } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { supabase } from "../supabase";
 import MainLayout from "../components/MainLayout.vue";
+import { useLanguage } from "../composables/useLanguage";
 
+const { currentLang } = useLanguage();
 const route = useRoute();
 const router = useRouter();
 
 const results = ref([]);
+const rawLatestArticles = ref([]); // 儲存最新一期的原始資料，供動態關鍵字使用
 const loading = ref(false);
 const inputQuery = ref("");
 const inputType = ref("title");
 const currentKeyword = ref("");
 const currentField = ref("title");
 
-// ⭐ 新增：熱門關鍵字相關變數
 const hotKeywords = ref([]);
 const latestIssueId = ref(null);
 
-const fieldLabels = {
-  title: "文章標題",
-  author: "作者",
-  content: "文章全文",
-  keyword: "關鍵字",
+// ⭐ 搜尋頁面多國語言字典
+const searchTranslations = {
+  "zh-TW": {
+    title: "搜尋",
+    hot: (id) => `第 ${id} 期關鍵字：`,
+    optTitle: "搜尋文章標題",
+    optAuthor: "搜尋作者",
+    optContent: "搜尋文章全文",
+    optKeyword: "搜尋關鍵字",
+    placeholder: "請輸入搜尋內容...",
+    searchBtn: "搜尋",
+    hint: "💡 提示：支援模糊搜尋，請選擇欄位並輸入關鍵字。",
+    resultTitle: (q, f) => `用「${q}」搜尋${f}的結果`,
+    count: (c) => `${c} 筆`,
+    loading: "搜尋中🕊️...",
+    noResult: "找不到相關內容，請嘗試其他關鍵字。",
+    clickHint: "點擊觀看文章全文",
+    issuePrefix: (id, title) => `第${id}期：${title}`,
+    authorPrefix: "作者：",
+    keywordPrefix: "🌿 關鍵字：",
+  },
+  en: {
+    title: "Search",
+    hot: (id) => `Vol.${id} Keywords:`,
+    optTitle: "Search by Title",
+    optAuthor: "Search by Author",
+    optContent: "Search Full Text",
+    optKeyword: "Search by Keyword",
+    placeholder: "Enter search term...",
+    searchBtn: "Search",
+    hint: "💡 Hint: Fuzzy search is supported. Select a field and enter a keyword.",
+    resultTitle: (q, f) => `Results for "${q}" in ${f}`,
+    count: (c) => `${c} found`,
+    loading: "Searching🕊️...",
+    noResult: "No results found. Please try other keywords.",
+    clickHint: "Click to read full article",
+    issuePrefix: (id, title) => `Vol.${id}: ${title}`,
+    authorPrefix: "Author: ",
+    keywordPrefix: "🌿 Keywords: ",
+  },
+  ja: {
+    title: "検索",
+    hot: (id) => `第${id}号 キーワード：`,
+    optTitle: "タイトルで検索",
+    optAuthor: "執筆者で検索",
+    optContent: "全文検索",
+    optKeyword: "キーワード検索",
+    placeholder: "検索キーワードを入力...",
+    searchBtn: "検索",
+    hint: "💡 ヒント：あいまい検索対応。検索対象を選択してキーワードを入力してください。",
+    resultTitle: (q, f) => `「${q}」の検索結果（${f}）`,
+    count: (c) => `${c} 件`,
+    loading: "検索中🕊️...",
+    noResult: "見つかりませんでした。別のキーワードをお試しください。",
+    clickHint: "クリックして全文を読む",
+    issuePrefix: (id, title) => `第${id}号：${title}`,
+    authorPrefix: "執筆者：",
+    keywordPrefix: "🌿 キーワード：",
+  },
+  ko: {
+    title: "검색",
+    hot: (id) => `제${id}호 키워드:`,
+    optTitle: "제목으로 검색",
+    optAuthor: "작성자로 검색",
+    optContent: "본문 검색",
+    optKeyword: "키워드로 검색",
+    placeholder: "검색어 입력...",
+    searchBtn: "검색",
+    hint: "💡 힌트: 퍼지 검색 지원. 필드를 선택하고 키워드를 입력하세요.",
+    resultTitle: (q, f) => `"${q}" 검색 결과 (${f})`,
+    count: (c) => `${c} 건`,
+    loading: "검색 중🕊️...",
+    noResult: "결과가 없습니다. 다른 키워드를 시도해 보세요.",
+    clickHint: "클릭하여 전문 읽기",
+    issuePrefix: (id, title) => `제${id}호: ${title}`,
+    authorPrefix: "작성자: ",
+    keywordPrefix: "🌿 키워드: ",
+  },
 };
 
-// ⭐ 新增：抓取最新一期關鍵字的邏輯
+const t = computed(() => searchTranslations[currentLang.value] || searchTranslations["zh-TW"]);
+
+const fieldLabels = computed(() => ({
+  title: t.value.optTitle,
+  author: t.value.optAuthor,
+  content: t.value.optContent,
+  keyword: t.value.optKeyword,
+}));
+
+// ⭐ 動態提取對應語言的關鍵字
+const extractKeywords = () => {
+  if (!rawLatestArticles.value || rawLatestArticles.value.length === 0) return;
+  const langKey = currentLang.value === "default" ? "zh_TW" : currentLang.value.replace("-", "_");
+
+  const allKeywords = rawLatestArticles.value
+    .map((a) => {
+      const trans = a.translations?.[langKey] || {};
+      return trans.keyword || a.keyword || "";
+    })
+    .filter((k) => k)
+    .join(",")
+    .split(/[、,，]/)
+    .map((k) =>
+      k
+        .replace(/🌿/g, "")
+        .replace(/(關鍵字|关键字|Keywords|キーワード|키워드)\s*[:：]/gi, "")
+        .trim(),
+    )
+    .filter((k) => k && k.length > 0);
+
+  hotKeywords.value = [...new Set(allKeywords)].sort(() => 0.5 - Math.random()).slice(0, 6);
+};
+
 const fetchLatestKeywords = async () => {
   try {
-    // 1. 找出最新發布的一期 (is_published = true, order by id desc)
-    const { data: issues, error: issueError } = await supabase
+    const { data: issues } = await supabase
       .from("issues")
       .select("id")
       .eq("is_published", true)
       .order("id", { ascending: false })
       .limit(1);
 
-    if (issueError || !issues || issues.length === 0) return;
+    if (!issues || issues.length === 0) return;
+    latestIssueId.value = issues[0].id;
 
-    const targetIssueId = issues[0].id;
-    latestIssueId.value = targetIssueId;
-
-    // 2. 找出該期的所有文章關鍵字
-    const { data: articles, error: artError } = await supabase
+    const { data: articles } = await supabase
       .from("articles")
-      .select("keyword")
-      .eq("issue", targetIssueId)
-      .eq("is_published", true); // 確保文章也是公開的
+      .select("keyword, translations") // ⭐ 一定要撈 translations 才能動態切換
+      .eq("issue", latestIssueId.value)
+      .eq("is_published", true);
 
-    if (artError || !articles) return;
-
-    // 3. 處理關鍵字 (清洗、去重、打亂)
-    const allKeywords = articles
-      .map((a) => a.keyword)
-      .filter((k) => k)
-      .join("、") // 支援頓號
-      .split(/[、,]/) // 支援頓號或逗號分隔
-      .map((k) => k.replace("🌿", "").replace("關鍵字：", "").replace("關鍵字:", "").trim())
-      .filter((k) => k && k.length > 0);
-
-    const uniqueKeywords = [...new Set(allKeywords)];
-    // 隨機打亂
-    const shuffled = uniqueKeywords.sort(() => 0.5 - Math.random());
-    // 取前 6 個
-    hotKeywords.value = shuffled.slice(0, 6);
+    if (!articles) return;
+    rawLatestArticles.value = articles;
+    extractKeywords();
   } catch (err) {
     console.error("載入關鍵字失敗:", err);
   }
 };
 
-// 點擊關鍵字標籤
+watch(currentLang, extractKeywords); // 當語言切換時重新抽取關鍵字
+
 const clickTag = (tag) => {
   inputQuery.value = tag;
   inputType.value = "keyword";
@@ -78,19 +169,13 @@ const clickTag = (tag) => {
 
 const handleSearch = () => {
   if (!inputQuery.value.trim()) return;
-  router.push({
-    name: "search",
-    query: {
-      q: inputQuery.value,
-      type: inputType.value,
-    },
-  });
+  router.push({ name: "search", query: { q: inputQuery.value, type: inputType.value } });
 };
 
+// ⭐ 使用 JSONB 深度搜尋，取代原本無法搜外文的 RPC
 const fetchResults = async () => {
   const q = route.query.q || "";
   const type = route.query.type || "title";
-
   inputQuery.value = q;
   inputType.value = type;
   currentKeyword.value = q;
@@ -100,16 +185,38 @@ const fetchResults = async () => {
     results.value = [];
     return;
   }
-
   loading.value = true;
   try {
-    const { data, error } = await supabase.rpc("search_articles", {
-      search_text: q,
-      field: type,
-    });
+    const langKey = currentLang.value === "default" ? "zh_TW" : currentLang.value.replace("-", "_");
+    const safeQ = q.replace(/'/g, "''"); // 避免 SQL 注入或語法錯誤
 
+    let query = supabase
+      .from("articles")
+      .select(
+        "id, title, subtitle, author, author_display, content, keyword, issue, issues(title, translations), translations",
+      )
+      .eq("is_published", true);
+
+    // 透過 .or 穿透搜尋 translations JSONB 欄位
+    if (type === "title") {
+      query = query.or(
+        `title.ilike.%${safeQ}%,subtitle.ilike.%${safeQ}%,translations->${langKey}->>title.ilike.%${safeQ}%,translations->${langKey}->>subtitle.ilike.%${safeQ}%`,
+      );
+    } else if (type === "author") {
+      query = query.or(
+        `author.ilike.%${safeQ}%,author_display.ilike.%${safeQ}%,translations->${langKey}->>author.ilike.%${safeQ}%,translations->${langKey}->>author_display.ilike.%${safeQ}%`,
+      );
+    } else if (type === "keyword") {
+      query = query.or(
+        `keyword.ilike.%${safeQ}%,translations->${langKey}->>keyword.ilike.%${safeQ}%`,
+      );
+    } else if (type === "content") {
+      query = query.ilike("content", `%${safeQ}%`); // 內文不翻譯，保留原始搜尋
+    }
+
+    const { data, error } = await query;
     if (error) throw error;
-    results.value = data;
+    results.value = data || [];
   } catch (err) {
     console.error("搜尋錯誤", err);
   } finally {
@@ -117,63 +224,57 @@ const fetchResults = async () => {
   }
 };
 
-// --- 反白與格式化邏輯 (保持不變) ---
+// ⭐ 處理搜尋結果的動態多語系顯示
+const displayResults = computed(() => {
+  const langKey = currentLang.value === "default" ? "zh_TW" : currentLang.value.replace("-", "_");
+  return results.value.map((a) => {
+    const tArt = a.translations?.[langKey] || {};
+    const tIss = a.issues?.translations?.[langKey] || {};
+    return {
+      ...a,
+      displayTitle: tArt.title || a.title,
+      displaySubtitle: tArt.subtitle || a.subtitle,
+      displayAuthor: tArt.author_display || tArt.author || a.author_display || a.author,
+      displayKeyword: tArt.keyword || a.keyword,
+      displayIssueTitle: tIss.title || a.issues?.title,
+    };
+  });
+});
+
 const highlightFull = (content, searchTerm) => {
   if (!content) return "";
   if (!searchTerm) return content;
-  const regex = new RegExp(`(${searchTerm})`, "gi");
-  return content.replace(regex, '<span class="highlight-text">$1</span>');
+  return content.replace(
+    new RegExp(`(${searchTerm})`, "gi"),
+    '<span class="highlight-text">$1</span>',
+  );
 };
 
 const highlightSnippet = (content, searchTerm) => {
   if (!content) return "";
   let processed = content
-    .replace(/\[\^(\d+)\]/g, '<sup class="search-footnote">$1</sup>')
-    .replace(/(^|\s)#{2,3}\s+(.*?)(?=\n|$)/g, '<div class="search-header">$2</div>')
-    .replace(/<(strong|b)>(.*?)<\/\1>/gi, "___BOLD___$2___END_BOLD___")
-    .replace(/<i>(.*?)<\/i>/gi, "___ITALIC___$1___END_ITALIC___")
-    .replace(/(^|\n)#{2,3}\s+(.*?)(?=\n|$)/g, "___HEADER___$2___END_HEADER___")
-    .replace(/\*\*(.*?)\*\*/g, "___BOLD___$1___END_BOLD___")
-    .replace(/\*(.*?)\*/g, "___KAITI___$1___END_KAITI___");
-
-  processed = processed
-    .replace(/!\[.*?\]\(.*?\)/g, " ")
+    .replace(/\[\^(\d+)\]/g, "")
     .replace(/<[^>]+>/g, "")
     .replace(/\s+/g, " ")
     .trim();
-
-  if (!searchTerm) return renderMarkers(processed.substring(0, 300)) + "...";
-
-  const lowerContent = processed.toLowerCase();
-  const lowerTerm = searchTerm.toLowerCase();
-  const index = lowerContent.indexOf(lowerTerm);
-
-  if (index === -1) return renderMarkers(processed.substring(0, 250)) + "...";
-
-  const start = Math.max(0, index - 150);
-  const end = Math.min(processed.length, index + searchTerm.length + 150);
-  let snippet = processed.substring(start, end);
-
-  if (start > 0) snippet = "..." + snippet;
-  if (end < processed.length) snippet = snippet + "...";
-
-  const regex = new RegExp(`(${searchTerm})`, "gi");
-  snippet = snippet.replace(regex, '<span class="highlight-text">$1</span>');
-
-  return renderMarkers(snippet);
-};
-
-const renderMarkers = (text) => {
-  return text
-    .replace(/___HEADER___(.*?)___END_HEADER___/g, '<div class="snippet-header">$1</div>')
-    .replace(/___BOLD___(.*?)___END_BOLD___/g, "<b>$1</b>")
-    .replace(/___KAITI___(.*?)___END_KAITI___/g, '<span class="snippet-kaiti">$1</span>')
-    .replace(/___ITALIC___(.*?)___END_ITALIC___/g, "<i>$1</i>");
+  if (!searchTerm) return processed.substring(0, 200) + "...";
+  const index = processed.toLowerCase().indexOf(searchTerm.toLowerCase());
+  if (index === -1) return processed.substring(0, 200) + "...";
+  let start = Math.max(0, index - 100);
+  let end = Math.min(processed.length, index + searchTerm.length + 100);
+  let snippet =
+    (start > 0 ? "..." : "") +
+    processed.substring(start, end) +
+    (end < processed.length ? "..." : "");
+  return snippet.replace(
+    new RegExp(`(${searchTerm})`, "gi"),
+    '<span class="highlight-text">$1</span>',
+  );
 };
 
 watch(() => route.query, fetchResults);
-
 onMounted(() => {
+  document.title = "搜尋 - 無境界者雜誌";
   fetchLatestKeywords();
   fetchResults();
 });
@@ -183,10 +284,9 @@ onMounted(() => {
   <MainLayout>
     <div class="search-page-container">
       <div class="search-header-section">
-        <h1 class="page-title"><span class="search-icon">🔍</span> 搜尋</h1>
-
+        <h1 class="page-title"><span class="search-icon">🔍</span> {{ t.title }}</h1>
         <div class="hot-keywords-section" v-if="hotKeywords.length > 0">
-          <span class="hot-label">第 {{ latestIssueId }} 期關鍵字：</span>
+          <span class="hot-label">{{ t.hot(latestIssueId) }}</span>
           <div class="tags-wrapper">
             <a
               v-for="tag in hotKeywords"
@@ -194,82 +294,70 @@ onMounted(() => {
               href="#"
               class="keyword-tag"
               @click.prevent="clickTag(tag)"
+              >#{{ tag }}</a
             >
-              #{{ tag }}
-            </a>
           </div>
         </div>
-
         <div class="search-box">
           <select v-model="inputType" class="search-select">
-            <option value="title">搜尋文章標題</option>
-            <option value="author">搜尋作者</option>
-            <option value="content">搜尋文章全文</option>
-            <option value="keyword">搜尋關鍵字</option>
+            <option value="title">{{ t.optTitle }}</option>
+            <option value="author">{{ t.optAuthor }}</option>
+            <option value="content">{{ t.optContent }}</option>
+            <option value="keyword">{{ t.optKeyword }}</option>
           </select>
-
           <input
             v-model="inputQuery"
             @keyup.enter="handleSearch"
             type="text"
-            placeholder="請輸入搜尋內容..."
+            :placeholder="t.placeholder"
             class="search-input"
           />
-
-          <button @click="handleSearch" class="btn">搜尋</button>
+          <button @click="handleSearch" class="btn">{{ t.searchBtn }}</button>
         </div>
-
-        <div class="hint-text">💡 提示：支援模糊搜尋，請選擇欄位並輸入關鍵字。</div>
+        <div class="hint-text">{{ t.hint }}</div>
       </div>
-
       <hr class="divider" />
 
       <div v-if="currentKeyword">
         <div class="result-status">
           <h2>
-            用 <span class="query-tag">「{{ currentKeyword }}」</span> 搜尋{{
-              fieldLabels[currentField]
-            }}的結果
-            <span class="count-tag">{{ results.length }} 筆</span>
+            {{ t.resultTitle(currentKeyword, fieldLabels[currentField]) }}
+            <span class="count-tag">{{ t.count(displayResults.length) }}</span>
           </h2>
         </div>
-
-        <div v-if="loading" class="loading-state">搜尋中🕊️...</div>
-
-        <div v-else-if="results.length === 0" class="no-result">
-          找不到相關內容，請嘗試其他關鍵字。
-        </div>
+        <div v-if="loading" class="loading-state">{{ t.loading }}</div>
+        <div v-else-if="displayResults.length === 0" class="no-result">{{ t.noResult }}</div>
 
         <div v-else class="results-list">
           <div
-            v-for="article in results"
+            v-for="article in displayResults"
             :key="article.id"
             class="result-card"
-            title="點擊觀看文章全文"
+            :title="t.clickHint"
           >
             <router-link :to="`/articles/${article.id}`" class="card-link">
-              <div class="meta-info">第{{ article.issue }}期：{{ article.issue_title }}</div>
-
+              <div class="meta-info">
+                {{ t.issuePrefix(article.issue, article.displayIssueTitle) }}
+              </div>
               <div class="title-row">
                 <h3 class="article-title-group">
-                  <span v-html="highlightFull(article.title, currentKeyword)"></span>
-                  <span v-if="article.subtitle" class="title-separator">──</span>
+                  <span v-html="highlightFull(article.displayTitle, currentKeyword)"></span>
+                  <span v-if="article.displaySubtitle" class="title-separator">──</span>
                   <span
-                    v-if="article.subtitle"
+                    v-if="article.displaySubtitle"
                     class="article-subtitle"
-                    v-html="highlightFull(article.subtitle, currentKeyword)"
+                    v-html="highlightFull(article.displaySubtitle, currentKeyword)"
                   ></span>
                 </h3>
-
                 <div class="article-author">
-                  作者：<span v-html="highlightFull(article.author, currentKeyword)"></span>
+                  {{ t.authorPrefix
+                  }}<span v-html="highlightFull(article.displayAuthor, currentKeyword)"></span>
                 </div>
               </div>
-
-              <div v-if="currentField === 'keyword' && article.keyword" class="keyword-row">
-                🌿 關鍵字：<span v-html="highlightFull(article.keyword, currentKeyword)"></span>
+              <div v-if="currentField === 'keyword' && article.displayKeyword" class="keyword-row">
+                {{ t.keywordPrefix
+                }}<span v-html="highlightFull(article.displayKeyword, currentKeyword)"></span>
               </div>
-
               <div
                 class="article-snippet"
                 v-html="highlightSnippet(article.content, currentKeyword)"
@@ -326,7 +414,6 @@ onMounted(() => {
   vertical-align: middle;
 }
 
-/* ⭐ 熱門關鍵字樣式 */
 .hot-keywords-section {
   margin-bottom: 25px;
   display: flex;
@@ -368,7 +455,7 @@ onMounted(() => {
 .search-select,
 .search-input,
 .btn {
-  height: 42px; /* 稍微加高 */
+  height: 42px;
   border-radius: 4px;
   border: 1px solid #ccc;
   font-size: 1rem;
@@ -439,7 +526,9 @@ onMounted(() => {
   padding: 25px;
   border-radius: 8px;
   border: 1px solid #eee;
-  transition: transform 0.2s, box-shadow 0.2s;
+  transition:
+    transform 0.2s,
+    box-shadow 0.2s;
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.02);
   cursor: pointer;
 }
@@ -486,8 +575,8 @@ onMounted(() => {
   font-size: 1rem;
   color: #555;
   font-family: "Times New Roman", serif;
-  white-space: normal; /* ⭐ 修改處：允許換行 */
-  word-wrap: break-word; /* ⭐ 修改處：長單字也能換行 */
+  white-space: normal;
+  word-wrap: break-word;
 }
 .article-snippet {
   font-size: 1.05rem;

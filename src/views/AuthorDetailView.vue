@@ -1,151 +1,159 @@
 <script setup>
-import { ref, onMounted, watch } from "vue";
+import { ref, onMounted, watch, computed } from "vue";
 import { useRoute } from "vue-router";
 import { supabase } from "../supabase";
 import MainLayout from "../components/MainLayout.vue";
+import { useLanguage } from "../composables/useLanguage";
 
+const { currentLang } = useLanguage();
 const route = useRoute();
 const author = ref(null);
-const authorArticles = ref([]);
+const rawAuthorArticles = ref([]); // ⭐ 存原始文章資料
 const loading = ref(true);
 
+const detailTrans = {
+  "zh-TW": {
+    loading: "正在載入作者資料...",
+    notFound: "找不到該位作者的資料 😖",
+    clickFull: "（點擊看全文）",
+    noArt: "這位作者目前還沒有發布文章。",
+  },
+  en: {
+    loading: "Loading...",
+    notFound: "Author not found 😖",
+    clickFull: "(Click to read full)",
+    noArt: "No articles published yet.",
+  },
+  ja: {
+    loading: "読み込み中...",
+    notFound: "執筆者が見つかりません 😖",
+    clickFull: "（クリックして全文を読む）",
+    noArt: "まだ記事がありません。",
+  },
+  ko: {
+    loading: "불러오는 중...",
+    notFound: "작성자를 찾을 수 없습니다 😖",
+    clickFull: "(클릭하여 전문 읽기)",
+    noArt: "아직 작성된 기사가 없습니다.",
+  },
+};
+const t = computed(() => detailTrans[currentLang.value] || detailTrans["zh-TW"]);
+
 const getArticleOrder = (id) => {
-  if (!id) return 0;
-  const match = id.match(/-(\d+)/);
+  const match = (id || "").match(/-(\d+)/);
   return match ? parseInt(match[1]) : 0;
 };
 
 const fetchData = async () => {
   const authorName = route.params.name;
-
   if (!authorName) return;
-
   try {
     loading.value = true;
-
     const { data: authorData, error: authorError } = await supabase
       .from("authors")
       .select("*")
       .eq("name", authorName)
       .single();
-
     if (authorError) throw authorError;
     author.value = authorData;
 
-    document.title = `${authorData.name} - 無境界者雜誌`;
+    const { data: articlesData, error: articlesError } = await supabase
+      .from("articles")
+      .select(
+        `id, title, subtitle, summary, author, category, issue, translations, issues (id, title, date, translations)`,
+      )
+      .or(`author.ilike.%${authorData.name}%,author_display.ilike.%${authorData.name}%`)
+      .neq("title", "編輯室報告");
+    if (articlesError) throw articlesError;
 
-    if (authorData) {
-      const { data: articlesData, error: articlesError } = await supabase
-        .from("articles")
-        .select(
-          `
-          id,
-          title,
-          subtitle,
-          summary,
-          author,
-          category,
-          issue,
-          issues (
-            id,
-            title,
-            date
-          )
-        `
-        )
-        // 條件：(作者是本人 OR 顯示作者是本人) AND (分類不是編輯室報告)
-        .or(`author.ilike.%${authorData.name}%,author_display.ilike.%${authorData.name}%`)
-        .neq("title", "編輯室報告");
-
-      if (articlesError) throw articlesError;
-
-      // ⭐ 前端排序邏輯修正
-      const sortedData = (articlesData || []).sort((a, b) => {
-        const issueA = a.issue || 0;
-        const issueB = b.issue || 0;
-
-        // 1. 期數 (Issue)：由大到小 (6 -> 5)
-        if (issueA !== issueB) {
-          return issueB - issueA; // 修改這裡：B - A = Descending
-        }
-
-        // 2. 文章序號：由小到大 (1 -> 2)
-        const orderA = getArticleOrder(a.id);
-        const orderB = getArticleOrder(b.id);
-        return orderA - orderB; // 保持這裡：A - B = Ascending
-      });
-
-      authorArticles.value = sortedData;
-    }
+    rawAuthorArticles.value = (articlesData || []).sort((a, b) => {
+      if ((a.issue || 0) !== (b.issue || 0)) return (b.issue || 0) - (a.issue || 0);
+      return getArticleOrder(a.id) - getArticleOrder(b.id);
+    });
   } catch (error) {
-    console.error("Error fetching author details:", error.message);
+    console.error("Error:", error.message);
   } finally {
     loading.value = false;
   }
 };
 
-onMounted(() => {
-  fetchData();
+// ⭐ 動態翻譯作者名稱與簡介
+const displayAuthor = computed(() => {
+  if (!author.value) return null;
+  const langKey = currentLang.value === "default" ? "zh_TW" : currentLang.value.replace("-", "_");
+  const trans = author.value.translations?.[langKey] || {};
+  return {
+    ...author.value,
+    displayName: trans.name || author.value.name,
+    displayBio: trans.bio || author.value.bio,
+  };
 });
 
-watch(
-  () => route.params.name,
-  () => fetchData()
-);
+// ⭐ 動態翻譯文章列表
+const displayArticles = computed(() => {
+  const langKey = currentLang.value === "default" ? "zh_TW" : currentLang.value.replace("-", "_");
+  return rawAuthorArticles.value.map((a) => {
+    const tArt = a.translations?.[langKey] || {};
+    const tIss = a.issues?.translations?.[langKey] || {};
+    return {
+      id: a.id,
+      title: tArt.title || a.title,
+      subtitle: tArt.subtitle || a.subtitle,
+      summary: tArt.summary || a.summary,
+      issueId: a.issues?.id,
+      issueTitle: tIss.title || a.issues?.title,
+      issueDate: tIss.date || a.issues?.date,
+    };
+  });
+});
+
+watch(displayAuthor, (newAuthor) => {
+  if (newAuthor) document.title = `${newAuthor.displayName} - 無境界者雜誌`;
+});
+
+onMounted(fetchData);
+watch(() => route.params.name, fetchData);
 </script>
 
 <template>
   <MainLayout>
     <div v-if="loading" class="loading-state">
-      <p>正在載入作者資料...</p>
+      <p>{{ t.loading }}</p>
     </div>
-
-    <div v-else-if="!author" class="no-data">
-      <p>找不到該位作者的資料 😖</p>
+    <div v-else-if="!displayAuthor" class="no-data">
+      <p>{{ t.notFound }}</p>
     </div>
-
     <div v-else class="author-detail-container">
       <section class="author-container">
         <div class="author-left">
-          <img :src="author.author_image" :alt="author.name" class="author-photo" />
+          <img :src="displayAuthor.author_image" :alt="displayAuthor.name" class="author-photo" />
         </div>
-
         <div class="author-info">
-          <h2>{{ author.name }}</h2>
-          <p style="white-space: pre-line">{{ author.bio }}</p>
+          <h2>{{ displayAuthor.displayName }}</h2>
+          <p style="white-space: pre-line">{{ displayAuthor.displayBio }}</p>
         </div>
       </section>
-
       <div class="main-divider"></div>
-
       <div class="article-list-section">
-        <ul class="article-list" v-if="authorArticles.length > 0">
-          <li v-for="(article, index) in authorArticles" :key="article.id">
+        <ul class="article-list" v-if="displayArticles.length > 0">
+          <li v-for="(article, index) in displayArticles" :key="article.id">
             <div class="article-meta">
-              <span class="issue"> Vol. {{ article.issues?.id }} {{ article.issues?.title }} </span>
-              <span class="separator">｜</span>
-              <span class="date">{{ article.issues?.date }}</span>
+              <span class="issue"> Vol. {{ article.issueId }} {{ article.issueTitle }} </span
+              ><span class="separator">｜</span><span class="date">{{ article.issueDate }}</span>
             </div>
-
             <h4 class="article-title-wrapper">
               <router-link :to="`/articles/${article.id}`" class="title-link" title="點擊看全文">
-                <span class="main-title">{{ article.title }}</span>
-                <span v-if="article.subtitle" class="sub-title"> ──{{ article.subtitle }} </span>
-
-                <span class="click-hint">（點擊看全文）</span>
+                <span class="main-title">{{ article.title }}</span
+                ><span v-if="article.subtitle" class="sub-title"> ──{{ article.subtitle }} </span>
+                <span class="click-hint">{{ t.clickFull }}</span>
               </router-link>
             </h4>
-
-            <p class="article-summary">
-              {{ article.summary }}
-            </p>
-
-            <hr class="divider" v-if="index < authorArticles.length - 1" />
+            <p class="article-summary">{{ article.summary }}</p>
+            <hr class="divider" v-if="index < displayArticles.length - 1" />
           </li>
         </ul>
-
         <div v-else class="no-articles">
-          <p>這位作者目前還沒有發布文章。</p>
+          <p>{{ t.noArt }}</p>
         </div>
       </div>
     </div>
@@ -167,13 +175,10 @@ watch(
   padding: 50px 0;
 }
 
-/* ==========================
-   1. 作者簡介區塊 (左圖右文)
-========================== */
 .author-container {
   display: flex;
   justify-content: center;
-  align-items: flex-start; /* 頂部對齊 */
+  align-items: flex-start;
   gap: 40px;
   margin-bottom: 30px;
 }
@@ -182,17 +187,15 @@ watch(
   flex-shrink: 0;
 }
 
-/* ⭐ 修改點：圖片加邊框 */
 .author-photo {
   width: 200px;
   height: 200px;
   border-radius: 50%;
   object-fit: cover;
-  border: 2px solid black; /* 1.5px 黑色邊框 */
+  border: 2px solid black;
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
 }
 
-/* 右側資訊區塊 (名字+簡介) */
 .author-info {
   flex: 1;
   display: flex;
@@ -202,9 +205,9 @@ watch(
 .author-info h2 {
   font-size: 2rem;
   color: #333;
-  margin-bottom: 15px; /* 名字與簡介的間距 */
+  margin-bottom: 15px;
   font-weight: bold;
-  text-align: left; /* 名字靠左對齊 */
+  text-align: left;
   font-family: "Times New Roman", serif;
 }
 
@@ -216,9 +219,6 @@ watch(
   margin: 0;
 }
 
-/* ==========================
-   2. 文章列表區塊
-========================== */
 .main-divider {
   height: 4px;
   background-color: rgba(0, 0, 0, 0.1);
@@ -248,7 +248,6 @@ watch(
   color: #ccc;
 }
 
-/* ⭐ 修改點：標題連結樣式 */
 .article-title-wrapper {
   margin: 10px 0;
   line-height: 1.4;
@@ -259,7 +258,7 @@ watch(
 .title-link {
   text-decoration: none;
   transition: color 0.2s ease;
-  color: #1e90ff; /* 指定顏色 */
+  color: #1e90ff;
   display: inline-block;
 }
 
@@ -268,17 +267,15 @@ watch(
   color: #0056b3;
 }
 
-/* ⭐ 修改點：真實存在的提示標籤樣式 */
 .click-hint {
   font-size: 0.8em;
   margin-left: 8px;
   color: #555;
   font-weight: normal;
-  opacity: 0; /* 預設隱藏 */
-  transition: opacity 0.3s ease; /* 淡入淡出效果 */
+  opacity: 0;
+  transition: opacity 0.3s ease;
 }
 
-/* 當滑鼠移過連結時，讓裡面的 click-hint 顯現 */
 .title-link:hover .click-hint {
   opacity: 1;
 }
@@ -310,39 +307,30 @@ watch(
   margin: 30px 0;
 }
 
-/* ==========================
-   RWD 手機版
-========================== */
 @media (max-width: 768px) {
   .author-container {
     flex-direction: column;
     align-items: center;
     gap: 20px;
   }
-
   .author-info h2 {
-    text-align: center; /* 手機版名字置中比較好看 */
+    text-align: center;
   }
-
   .author-photo {
     width: 180px;
     height: 180px;
   }
-
   .article-meta {
     display: flex;
     flex-direction: column;
     gap: 5px;
   }
-
   .separator {
     display: none;
   }
-
   .title-link {
     display: block;
   }
-
   .sub-title {
     display: block;
     margin-left: 0;

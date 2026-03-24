@@ -1,8 +1,7 @@
 // src/data/submissionThemes.js
 
 // 圖片基礎路徑 (Supabase)
-const TOPIC_BASE_URL =
-  "https://pottupypvdzamztdhsah.supabase.co/storage/v1/object/public/images/topics";
+const TOPIC_BASE_URL = "https://res.cloudinary.com/nonchurch2025/image/upload";
 
 export const submissionThemes = [
   {

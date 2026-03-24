@@ -4,22 +4,125 @@ import { useRoute, useRouter } from "vue-router";
 import { supabase } from "../supabase";
 import { useEditorMode } from "../composables/useEditorMode";
 import MainLayout from "../components/MainLayout.vue";
+import { useLanguage } from "../composables/useLanguage";
 
 const { isEditor } = useEditorMode();
+const { currentLang } = useLanguage();
 const route = useRoute();
 const router = useRouter();
 
 const selectedYear = ref(2025);
-const yearOptions = [
-  { value: 2026, label: "2026 年 (第 7-12 期)" },
-  { value: 2025, label: "2025 年 (第 1-6 期)" },
-];
+
+// ⭐ 文章列表多國語言字典
+const listTranslations = {
+  "zh-TW": {
+    title: "文章列表",
+    selectYear: "選擇年份：",
+    opt2026: "2026 年 (第 7-12 期)",
+    opt2025: "2025 年 (第 1-6 期)",
+    loading: "正在載入文章列表 🕊️",
+    noData: (y) => `尚無 ${y} 年的雜誌資料，敬請期待。🥺`,
+    issueTitle: (id, t) => `第 ${id} 期《${t}》`,
+    draft: "(期數草稿)",
+    download: "點擊封面下載PDF檔",
+    footer1: "投稿資訊／下期主題",
+    footer2: "編輯資訊／線上資訊",
+  },
+  en: {
+    title: "Articles",
+    selectYear: "Select Year:",
+    opt2026: "2026 (Vol. 7-12)",
+    opt2025: "2025 (Vol. 1-6)",
+    loading: "Loading Articles🕊️...",
+    noData: (y) => `No data for ${y} yet. Stay tuned.🥺`,
+    issueTitle: (id, t) => `Vol.${id} 《${t}》`,
+    draft: "(Draft)",
+    download: "Download PDF",
+    footer1: "Submission / Next Issue",
+    footer2: "Editorial / Online Info",
+  },
+  ja: {
+    title: "記事一覧",
+    selectYear: "年を選択：",
+    opt2026: "2026年 (第7-12号)",
+    opt2025: "2025年 (第1-6号)",
+    loading: "読み込み中🕊️...",
+    noData: (y) => `${y}年のデータはまだありません。🥺`,
+    issueTitle: (id, t) => `第 ${id} 号《${t}》`,
+    draft: "(下書き)",
+    download: "PDFをダウンロード",
+    footer1: "投稿案内／次号テーマ",
+    footer2: "編集情報／オンライン情報",
+  },
+  ko: {
+    title: "기사 목록",
+    selectYear: "연도 선택:",
+    opt2026: "2026년 (제7-12호)",
+    opt2025: "2025년 (제1-6호)",
+    loading: "불러오는 중🕊️...",
+    noData: (y) => `${y}년 데이터가 아직 없습니다.🥺`,
+    issueTitle: (id, t) => `제 ${id} 호《${t}》`,
+    draft: "(초안)",
+    download: "PDF 다운로드",
+    footer1: "투고 안내 / 다음 호 주제",
+    footer2: "편집 정보 / 온라인 정보",
+  },
+};
+const t = computed(() => listTranslations[currentLang.value] || listTranslations["zh-TW"]);
+
+const yearOptions = computed(() => [
+  { value: 2026, label: t.value.opt2026 },
+  { value: 2025, label: t.value.opt2025 },
+]);
+
+const categoryTranslations = {
+  "zh-TW": {
+    專題文章: "專題文章",
+    評論與回應: "評論與回應",
+    人物專訪: "人物專訪",
+    生命故事: "生命故事",
+    時事感想: "時事感想",
+    文藝創作: "文藝創作",
+    公告與剪影: "公告與剪影",
+    封面故事: "封面故事",
+  },
+  en: {
+    專題文章: "Feature",
+    評論與回應: "Review",
+    人物專訪: "Interview",
+    生命故事: "Life Story",
+    時事感想: "Current Affairs",
+    文藝創作: "Literature",
+    公告與剪影: "Notice",
+    封面故事: "Cover Story",
+  },
+  ja: {
+    專題文章: "特集記事",
+    評論與回應: "評論と応答",
+    人物專訪: "インタビュー",
+    生命故事: "ライフストーリー",
+    時事感想: "時事コラム",
+    文藝創作: "文芸創作",
+    公告與剪影: "お知らせ",
+    封面故事: "カバーストーリー",
+  },
+  ko: {
+    專題文章: "특집 기사",
+    評論與回應: "평론 및 응답",
+    人物專訪: "인터뷰",
+    生命故事: "삶의 이야기",
+    時事感想: "시사 칼럼",
+    文藝創作: "문예 창작",
+    公告與剪影: "공지사항",
+    封面故事: "커버 스토리",
+  },
+};
+const translateCategory = (cat) =>
+  categoryTranslations[currentLang.value]?.[cat] || categoryTranslations["zh-TW"]?.[cat] || cat;
 
 const groupedIssues = ref([]);
 const loading = ref(true);
 
-// ⭐ 新增：記錄捲動位置的輔助函式
-// 當點擊文章時，記錄這篇文章所屬的期數 ID (例如 #issue-6)
 const saveScrollPosition = (selector) => {
   const currentState = window.history.state || {};
   window.history.replaceState({ ...currentState, scrollTo: selector }, "");
@@ -29,65 +132,43 @@ const extractOrderFromId = (idStr) => {
   if (!idStr) return 0;
   const match = idStr.match(/-(\d+)/);
   if (match) return parseInt(match[1]);
-  const num = parseInt(idStr);
-  return isNaN(num) ? 0 : num;
+  return parseInt(idStr) || 0;
 };
-
 const formatDisplayId = (num) => (num ? num.toString().padStart(2, "0") : "");
-
 const scrollToAnchor = async () => {
   if (route.hash) {
     await nextTick();
     const targetId = route.hash.substring(1);
     const element = document.getElementById(targetId);
-    if (element) {
-      element.scrollIntoView({ behavior: "auto", block: "center" });
-    }
+    if (element) element.scrollIntoView({ behavior: "auto", block: "center" });
   }
 };
 
 const fetchAndGroupArticles = async () => {
   loading.value = true;
-
+  // ⭐ 確保撈取文章的 translations 欄位
   let query = supabase
     .from("issues")
     .select(
-      `
-      *,
-      content:articles (
-        id, category, title, subtitle, author, author_display, section, is_published
-      )
-    `
+      `*, content:articles (id, category, title, subtitle, author, author_display, section, is_published, translations)`,
     )
     .order("id", { ascending: false });
-
-  if (!isEditor.value) {
-    query = query.eq("is_published", true);
-  }
-
+  if (!isEditor.value) query = query.eq("is_published", true);
   const { data: issuesData, error } = await query;
-
   if (error) {
-    console.error("載入失敗:", error);
     loading.value = false;
     return;
   }
 
   groupedIssues.value = issuesData.map((issue) => {
-    const storageBase = "https://pottupypvdzamztdhsah.supabase.co/storage/v1/object/public/images";
-    const defaultCover = `${storageBase}/covers/cover-${issue.id}.png`;
-    const defaultPdf = `${storageBase}/magazines/Vol.${issue.id}.pdf`;
-
-    issue.cover_img =
-      issue.cover_img && issue.cover_img.startsWith("http") ? issue.cover_img : defaultCover;
-    issue.pdf_link =
-      issue.pdf_link && issue.pdf_link.startsWith("http") ? issue.pdf_link : defaultPdf;
-
-    if (issue.content && issue.content.length > 0) {
-      if (!isEditor.value) {
-        issue.content = issue.content.filter((a) => a.is_published);
-      }
-
+    issue.cover_img = issue.cover_img?.startsWith("http")
+      ? issue.cover_img
+      : `https://res.cloudinary.com/nonchurch2025/image/upload/cover-${issue.id}.png`;
+    issue.pdf_link = issue.pdf_link?.startsWith("http")
+      ? issue.pdf_link
+      : `https://res.cloudinary.com/nonchurch2025/image/upload/Vol.${issue.id}.pdf`;
+    if (issue.content?.length > 0) {
+      if (!isEditor.value) issue.content = issue.content.filter((a) => a.is_published);
       issue.content.forEach((art) => {
         art.routeId = art.id;
         art._sortOrder = extractOrderFromId(art.id);
@@ -96,60 +177,38 @@ const fetchAndGroupArticles = async () => {
         art.type = "article";
         if (art.author_display) art.author = art.author_display;
       });
-
       issue.content.sort((a, b) => a._sortOrder - b._sortOrder);
-
       let lastSection = null;
       issue.content.forEach((art) => {
-        const currentSection = art.section ? art.section.trim() : null;
+        const currentSection = art.section?.trim();
         if (currentSection) {
-          if (currentSection === lastSection) {
-            art.showSectionHeader = false;
-          } else {
-            art.showSectionHeader = true;
-            lastSection = currentSection;
-          }
-        } else {
-          art.showSectionHeader = false;
-        }
+          art.showSectionHeader = currentSection !== lastSection;
+          lastSection = currentSection;
+        } else art.showSectionHeader = false;
       });
-
-      let maxId = 0;
-      if (issue.content.length > 0) {
-        maxId = issue.content[issue.content.length - 1]._sortOrder;
-      }
+      let maxId = issue.content.length > 0 ? issue.content[issue.content.length - 1]._sortOrder : 0;
       issue.content.push({
         display_id: formatDisplayId(maxId + 1),
-        title: "投稿資訊／下期主題",
         type: "text-only",
         is_footer_start: true,
       });
       issue.content.push({
         display_id: formatDisplayId(maxId + 2),
-        title: "編輯資訊／線上資訊",
         type: "text-only",
       });
     } else {
       issue.content = [];
     }
-
     issue.isDraft = !issue.is_published;
     return issue;
   });
 
   const queryYear = parseInt(route.query.year);
-  const isQueryValid = yearOptions.some((opt) => opt.value === queryYear);
-
-  if (isQueryValid) {
-    selectedYear.value = queryYear;
-  } else if (groupedIssues.value.length > 0) {
-    const latestIssue = groupedIssues.value[0];
-    const latestYear = 2025 + Math.floor((latestIssue.id - 1) / 6);
-    if (yearOptions.some((opt) => opt.value === latestYear)) {
-      selectedYear.value = latestYear;
-    }
+  if (yearOptions.value.some((opt) => opt.value === queryYear)) selectedYear.value = queryYear;
+  else if (groupedIssues.value.length > 0) {
+    const latestYear = 2025 + Math.floor((groupedIssues.value[0].id - 1) / 6);
+    if (yearOptions.value.some((opt) => opt.value === latestYear)) selectedYear.value = latestYear;
   }
-
   loading.value = false;
   scrollToAnchor();
 };
@@ -164,26 +223,48 @@ const getCategoryColor = (category) => {
     文藝創作: "#27408b",
     公告與剪影: "#6a5acd",
     封面故事: "#7d6c29",
-    光影時刻: "#7d6c29",
-    實驗園地: "#db7093",
   };
   return map[category] || "#999";
 };
 
-const filteredIssues = computed(() => {
-  return groupedIssues.value.filter((i) => {
-    const issueYear = 2025 + Math.floor((i.id - 1) / 6);
-    return issueYear === selectedYear.value;
+const filteredIssues = computed(() =>
+  groupedIssues.value.filter((i) => 2025 + Math.floor((i.id - 1) / 6) === selectedYear.value),
+);
+
+// ⭐ 動態映射當前語系的雜誌與文章資料
+const displayIssues = computed(() => {
+  const langKey = currentLang.value === "default" ? "zh_TW" : currentLang.value.replace("-", "_");
+
+  return filteredIssues.value.map((issue) => {
+    const tIss = issue.translations?.[langKey] || {};
+
+    const mappedContent = issue.content.map((art) => {
+      if (art.type === "text-only") {
+        return {
+          ...art,
+          title: art.is_footer_start ? t.value.footer1 : t.value.footer2,
+        };
+      }
+      const tArt = art.translations?.[langKey] || {};
+      return {
+        ...art,
+        title: tArt.title || art.title,
+        subtitle: tArt.subtitle || art.subtitle,
+        author: tArt.author_display || tArt.author || art.author,
+      };
+    });
+
+    return {
+      ...issue,
+      title: tIss.title || issue.title,
+      date: tIss.date || issue.date,
+      content: mappedContent,
+    };
   });
 });
 
-watch(selectedYear, (newVal) => {
-  router.replace({ query: { ...route.query, year: newVal } });
-});
-
-watch(isEditor, () => {
-  fetchAndGroupArticles();
-});
+watch(selectedYear, (newVal) => router.replace({ query: { ...route.query, year: newVal } }));
+watch(isEditor, fetchAndGroupArticles);
 
 onMounted(() => {
   document.title = "文章列表 - 無境界者雜誌";
@@ -195,13 +276,11 @@ onMounted(() => {
   <MainLayout>
     <div class="article-list-page">
       <h1 class="page-main-title">
-        <span class="emoji">📚</span>文章列表<span class="emoji">📚</span>
+        <span class="emoji">📚</span>{{ t.title }}<span class="emoji">📚</span>
       </h1>
-
       <div class="main-divider"></div>
-
       <div class="year-selector-wrapper">
-        <label for="year-select">選擇年份：</label>
+        <label for="year-select">{{ t.selectYear }}</label>
         <div class="custom-select">
           <select id="year-select" v-model="selectedYear">
             <option v-for="item in yearOptions" :key="item.value" :value="item.value">
@@ -211,23 +290,20 @@ onMounted(() => {
           <span class="arrow">▼</span>
         </div>
       </div>
-
       <div v-if="loading" class="loading-state">
-        正在載入文章列表 🕊️<span class="loading-dots"></span>
+        {{ t.loading }}<span class="loading-dots"></span>
+      </div>
+      <div v-else-if="displayIssues.length === 0" class="no-data">
+        <p>{{ t.noData(selectedYear) }}</p>
       </div>
 
-      <div v-else-if="filteredIssues.length === 0" class="no-data">
-        <p>尚無 {{ selectedYear }} 年的雜誌資料，敬請期待。🥺</p>
-      </div>
-
-      <div v-else v-for="(issue, index) in filteredIssues" :key="issue.id" class="magazine-item">
+      <div v-else v-for="(issue, index) in displayIssues" :key="issue.id" class="magazine-item">
         <br />
         <h2 :id="`issue-${issue.id}`">
-          <span>　　</span>第 {{ issue.id }} 期《{{ issue.title }}》
+          <span>　　</span>{{ t.issueTitle(issue.id, issue.title) }}
           <span class="issue-date">／{{ issue.date }}</span>
-          <span v-if="issue.isDraft" class="draft-badge"> (期數草稿) </span>
+          <span v-if="issue.isDraft" class="draft-badge"> {{ t.draft }} </span>
         </h2>
-
         <div class="content-wrapper">
           <div class="left-section">
             <ul>
@@ -235,64 +311,51 @@ onMounted(() => {
                 <div v-if="item.section && item.showSectionHeader">
                   <br />
                   <div class="title-box">
-                    <h3 class="theme-title">{{ item.section }}</h3>
+                    <h3 class="theme-title">{{ translateCategory(item.section) }}</h3>
                   </div>
                 </div>
-
                 <div v-if="item.is_footer_start">
                   <br />
                   <div class="title-box"></div>
                 </div>
-
                 <p>
-                  <span v-if="item.display_id" style="font-weight: bold; margin-right: 0.5em">
-                    {{ item.display_id }}
-                  </span>
-
+                  <span v-if="item.display_id" style="font-weight: bold; margin-right: 0.5em">{{
+                    item.display_id
+                  }}</span>
                   <span
                     v-if="item.category"
                     class="article-type"
                     :style="{ color: item.color, marginRight: '0.5em', fontSize: '0.8em' }"
                   >
-                    {{ item.category }}
+                    {{ translateCategory(item.category) }}
                   </span>
-
                   <router-link
                     v-if="item.type !== 'text-only'"
                     :to="`/articles/${item.routeId}`"
                     @click="saveScrollPosition(`#issue-${issue.id}`)"
                   >
-                    {{ item.title }}
-                    <span v-if="item.subtitle">──{{ item.subtitle }}</span>
-
+                    {{ item.title }}<span v-if="item.subtitle">──{{ item.subtitle }}</span>
                     <span
                       v-if="isEditor && !item.is_published"
                       style="color: red; font-size: 0.8em; font-weight: bold; margin-left: 5px"
+                      >(草稿)</span
                     >
-                      (草稿)
-                    </span>
                   </router-link>
-
-                  <span v-else>
-                    {{ item.title }}
-                  </span>
-
+                  <span v-else>{{ item.title }}</span>
                   <span v-if="item.author" class="author">｜{{ item.author }}</span>
                 </p>
               </li>
             </ul>
           </div>
-
           <div class="right-section">
-            <a :href="issue.pdf_link" target="_blank" title="點擊封面下載PDF檔">
-              <img :src="issue.cover_img" :alt="`第${issue.id}期封面`" class="magazine-cover" />
+            <a :href="issue.pdf_link" target="_blank" :title="t.download">
+              <img :src="issue.cover_img" :alt="`Vol.${issue.id} Cover`" class="magazine-cover" />
             </a>
-            <p class="cover-description">點擊封面下載PDF檔</p>
+            <p class="cover-description">{{ t.download }}</p>
           </div>
         </div>
-
         <br /><br />
-        <div v-if="index !== filteredIssues.length - 1" class="issue-divider"></div>
+        <div v-if="index !== displayIssues.length - 1" class="issue-divider"></div>
       </div>
     </div>
   </MainLayout>

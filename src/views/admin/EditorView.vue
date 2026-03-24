@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted, nextTick, watch } from "vue";
+import { ref, computed, onMounted, nextTick } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { marked } from "marked";
 import { supabase } from "../../supabase";
@@ -11,9 +11,6 @@ const isEditMode = ref(false);
 const showPreview = ref(true);
 const textareaRef = ref(null);
 const previewRef = ref(null);
-
-// ⭐ 新增：儲存該期刊資料夾下的所有圖片清單
-const issueImages = ref([]);
 
 const form = ref({
   id: "",
@@ -56,34 +53,7 @@ const currentCategoryColor = computed(() => {
   return cat ? cat.color : "#ccc";
 });
 
-// ⭐ 核心功能：讀取該期數的所有圖片
-const fetchIssueImages = async () => {
-  if (!form.value.issue) return;
-
-  // 假設路徑結構為: images bucket -> articles -> issue-X
-  const path = `articles/issue-${form.value.issue}`;
-
-  const { data, error } = await supabase.storage.from("images").list(path, {
-    limit: 1000,
-    offset: 0,
-    sortBy: { column: "name", order: "asc" },
-  });
-
-  if (!error && data) {
-    issueImages.value = data;
-    console.log(`已載入第 ${form.value.issue} 期圖片庫: ${data.length} 張`);
-  }
-};
-
-// ⭐ 監聽期數變化，重新抓取圖片清單
-watch(
-  () => form.value.issue,
-  (newVal) => {
-    if (newVal) fetchIssueImages();
-  }
-);
-
-// ⭐ 預覽內容計算屬性 (增強版)
+// ⭐ 預覽內容計算屬性 (已移除 Supabase 圖片轉換，回歸純淨 Markdown 解析)
 const previewContent = computed(() => {
   let fullText = form.value.content || "";
 
@@ -98,33 +68,7 @@ const previewContent = computed(() => {
   // 3. 解析 Markdown 為 HTML
   let parsedHtml = marked.parse(formattedContent, { gfm: true, breaks: true });
 
-  // ⭐ 4. 自動圖片路徑解析 (Magic happens here!)
-  // 尋找所有 src="..." 屬性
-  parsedHtml = parsedHtml.replace(/src="([^"]+)"/g, (match, srcValue) => {
-    // 如果已經是完整網址 (http/https) 或 base64 (data:)，就不動它
-    if (srcValue.startsWith("http") || srcValue.startsWith("data:") || srcValue.startsWith("//")) {
-      return match;
-    }
-
-    // 否則，嘗試在 issueImages 清單中尋找匹配的檔案
-    // 支援比對：完全檔名 OR 去除副檔名後的檔名
-    const matchedFile = issueImages.value.find((file) => {
-      const nameWithoutExt = file.name.substring(0, file.name.lastIndexOf(".")) || file.name;
-      return file.name === srcValue || nameWithoutExt === srcValue;
-    });
-
-    if (matchedFile) {
-      // 找到了！組合成完整 URL
-      const fullPath = `articles/issue-${form.value.issue}/${matchedFile.name}`;
-      const { data } = supabase.storage.from("images").getPublicUrl(fullPath);
-      return `src="${data.publicUrl}"`;
-    }
-
-    // 沒找到，回傳原本的 (雖然可能會破圖，但保留原始輸入比較好除錯)
-    return match;
-  });
-
-  // 5. 手動附加註釋列表
+  // 4. 手動附加註釋列表
   if (form.value.footnotes && form.value.footnotes.length > 0) {
     const listItems = form.value.footnotes
       .map((note) => {
@@ -189,9 +133,6 @@ onMounted(async () => {
       form.value.issue_title = route.query.issueTitle;
     }
   }
-
-  // 載入完文章後，嘗試載入圖片庫
-  fetchIssueImages();
 });
 
 const loadArticle = async (id) => {
@@ -297,7 +238,7 @@ const insertOrWrap = async (
   suffix,
   defaultText = "文字",
   togglePrefix = null,
-  toggleSuffix = null
+  toggleSuffix = null,
 ) => {
   const textarea = textareaRef.value;
   if (!textarea) return;
@@ -371,7 +312,7 @@ const tools = [
       insertOrWrap(
         "<blockquote>\n",
         '\n<div class="rel">── 出處</div>\n</blockquote>\n',
-        "引用的內文..."
+        "引用的內文...",
       ),
   },
   { label: "去除縮排", action: () => insertOrWrap('<p class="no-indent">', "</p>", "無縮排文字") },
@@ -394,60 +335,60 @@ const tools = [
   },
 ];
 
-// ⭐ 更新了範本，把預設文字改為 src="圖片檔名"
+// ⭐ 更新了範本，把預設文字改為 src="圖片網址"
 const components = [
   {
     label: "📚 書籍簡介",
     action: () =>
       insertBlock(
-        `\n\n<div class="book-box"><div class="book-info"><strong>書籍資訊</strong><br />【書名】...<br />【作者】...<br />【出版】...</div><div class="book-image"><img src="檔名" alt="封面" /></div></div>\n\n`
+        `\n\n<div class="book-box"><div class="book-info"><strong>書籍資訊</strong><br />【書名】...<br />【作者】...<br />【出版】...</div><div class="book-image"><img src="圖片網址" alt="封面" /></div></div>\n\n`,
       ),
   },
   {
     label: "❝ 書本引言",
     action: () =>
       insertBlock(
-        `\n\n<div class="book-quote">引用的內文...<div class="book-quote-rel"> ──《書名》，頁數 </div></div>\n\n`
+        `\n\n<div class="book-quote">引用的內文...<div class="book-quote-rel"> ──《書名》，頁數 </div></div>\n\n`,
       ),
   },
   {
     label: "🖼️ 主題圖片",
     action: () =>
-      insertBlock(`\n\n<div class="theme-image"><img src="檔名" alt="主題圖片"></div>\n\n`),
+      insertBlock(`\n\n<div class="theme-image"><img src="圖片網址" alt="主題圖片"></div>\n\n`),
   },
   {
     label: "🖼️ 圖片(左)",
     action: () =>
       insertBlock(
-        `\n\n<figure class="img-left px-300"><img src="檔名" alt="描述"><figcaption>圖片說明</figcaption></figure>\n\n`
+        `\n\n<figure class="img-left px-300"><img src="圖片網址" alt="描述"><figcaption>圖片說明</figcaption></figure>\n\n`,
       ),
   },
   {
     label: "🖼️ 圖片(中)",
     action: () =>
       insertBlock(
-        `\n\n<figure class="img-bottom px-600"><img src="檔名" alt="描述"><figcaption>圖片說明文字</figcaption></figure>\n\n`
+        `\n\n<figure class="img-bottom px-600"><img src="圖片網址" alt="描述"><figcaption>圖片說明文字</figcaption></figure>\n\n`,
       ),
   },
   {
     label: "🖼️ 圖片(右)",
     action: () =>
       insertBlock(
-        `\n\n<figure class="img-right px-300"><img src="檔名" alt="描述"><figcaption>圖片說明</figcaption></figure>\n\n`
+        `\n\n<figure class="img-right px-300"><img src="圖片網址" alt="描述"><figcaption>圖片說明</figcaption></figure>\n\n`,
       ),
   },
   {
     label: "👤 作者簡介",
     action: () =>
       insertBlock(
-        `\n\n<div class="author-profile"><img src="檔名" alt="作者頭像"><div><h3>作者名稱</h3><p>作者簡介內容...</p></div></div>\n\n`
+        `\n\n<div class="author-profile"><img src="圖片網址" alt="作者頭像"><div><h3>作者名稱</h3><p>作者簡介內容...</p></div></div>\n\n`,
       ),
   },
   {
     label: "ℹ️ 資訊卡片",
     action: () =>
       insertBlock(
-        `\n\n<div class="info-card"><div class="info-card-inner"><img src="Logo檔名" alt="Logo"><div><h3>標題</h3><div class="info-card-links"><a href="#" target="_blank">連結1</a></div></div></div></div>\n\n`
+        `\n\n<div class="info-card"><div class="info-card-inner"><img src="Logo圖片網址" alt="Logo"><div><h3>標題</h3><div class="info-card-links"><a href="#" target="_blank">連結1</a></div></div></div></div>\n\n`,
       ),
   },
   {

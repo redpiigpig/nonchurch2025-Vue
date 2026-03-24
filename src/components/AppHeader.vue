@@ -2,10 +2,66 @@
 import { computed } from "vue";
 import { useRoute } from "vue-router";
 import { useEditorMode } from "../composables/useEditorMode";
+import { useLanguage } from "../composables/useLanguage";
 
 const route = useRoute();
 const { isEditor } = useEditorMode();
 const isEditMode = computed(() => isEditor.value);
+
+// 取得全域語言變數
+const { currentLang } = useLanguage();
+
+// 導覽列翻譯字典
+const navTranslations = {
+  "zh-TW": {
+    home: "首頁",
+    mission: "使命宣言",
+    articles: "文章列表",
+    authors: "專欄作者",
+    subscribe: "線上訂閱",
+    submit: "投稿資訊",
+    admin: "⚙️ 後台管理",
+  },
+  "zh-CN": {
+    home: "首页",
+    mission: "使命宣言",
+    articles: "文章列表",
+    authors: "专栏作者",
+    subscribe: "在线订阅",
+    submit: "投稿资讯",
+    admin: "⚙️ 后台管理",
+  },
+  en: {
+    home: "Home",
+    mission: "Mission",
+    articles: "Articles",
+    authors: "Authors",
+    subscribe: "Subscribe",
+    submit: "Submission",
+    admin: "⚙️ Admin",
+  },
+  ja: {
+    home: "ホーム",
+    mission: "ミッション",
+    articles: "記事一覧",
+    authors: "執筆者",
+    subscribe: "購読する",
+    submit: "投稿案内",
+    admin: "⚙️ 管理画面",
+  },
+  ko: {
+    home: "홈",
+    mission: "사명 선언",
+    articles: "기사 목록",
+    authors: "칼럼니스트",
+    subscribe: "온라인 구독",
+    submit: "투고 안내",
+    admin: "⚙️ 관리자",
+  },
+};
+
+// 自動計算目前的翻譯文字 (如果是 default 就顯示繁體中文的內容)
+const t = computed(() => navTranslations[currentLang.value] || navTranslations["zh-TW"]);
 
 // 導覽列連結生成器：前台維持原樣，後台加 /admin
 const getLink = (path) => {
@@ -15,27 +71,22 @@ const getLink = (path) => {
   return path;
 };
 
-// ⭐ 鏡像切換按鈕邏輯 (保持您原本的邏輯)
+// 鏡像切換按鈕邏輯
 const editLink = computed(() => {
   const currentPath = route.path;
 
-  // A. 文章詳情 -> 編輯器
   if (!isEditMode.value && route.name === "article-detail" && route.params.id) {
     return `/admin/editor/${route.params.id}`;
   }
-  // B. 編輯器 -> 文章詳情
   if (
     isEditMode.value &&
     (route.name === "admin-editor-edit" || route.name === "admin-editor-new")
   ) {
     return route.params.id ? `/articles/${route.params.id}` : "/articles";
   }
-
-  // C. 一般頁面切換 (/mission <-> /admin/mission)
   if (isEditMode.value) {
     return currentPath.replace(/^\/admin/, "") || "/home";
   } else {
-    // 如果在首頁，要去的後台對應頁是 /admin/home (鏡像首頁)，不是 /admin (管理後台)
     return currentPath === "/" ? "/admin/home" : `/admin${currentPath}`;
   }
 });
@@ -47,12 +98,12 @@ const editLink = computed(() => {
       <div class="logo">
         <RouterLink :to="isEditMode ? '/admin/home' : '/home'">
           <img
-            src="https://pottupypvdzamztdhsah.supabase.co/storage/v1/object/public/images/system/Header_Logo.png"
+            src="https://res.cloudinary.com/nonchurch2025/image/upload/Header_Logo.png"
             alt="Logo"
             class="logo-icon"
           />
           <img
-            src="https://pottupypvdzamztdhsah.supabase.co/storage/v1/object/public/images/system/Header_text.png"
+            src="https://res.cloudinary.com/nonchurch2025/image/upload/Header_text.png"
             alt="無境界者"
             class="logo-text"
           />
@@ -61,14 +112,25 @@ const editLink = computed(() => {
       </div>
 
       <div class="menu">
-        <RouterLink v-if="isEditMode" to="/admin" class="admin-link">⚙️ 後台管理</RouterLink>
+        <RouterLink v-if="isEditMode" to="/admin" class="admin-link">{{ t.admin }}</RouterLink>
 
-        <RouterLink :to="getLink('/home')">首頁</RouterLink>
-        <RouterLink :to="getLink('/mission')">使命宣言</RouterLink>
-        <RouterLink :to="getLink('/articles')">文章列表</RouterLink>
-        <RouterLink :to="getLink('/authors')">專欄作者</RouterLink>
-        <a href="https://forms.gle/aWSBFRfQ74QY13nw8" target="_blank">線上訂閱</a>
-        <RouterLink :to="getLink('/submit')">投稿資訊</RouterLink>
+        <RouterLink :to="getLink('/home')">{{ t.home }}</RouterLink>
+        <RouterLink :to="getLink('/mission')">{{ t.mission }}</RouterLink>
+        <RouterLink :to="getLink('/articles')">{{ t.articles }}</RouterLink>
+        <RouterLink :to="getLink('/authors')">{{ t.authors }}</RouterLink>
+        <a href="https://forms.gle/aWSBFRfQ74QY13nw8" target="_blank">{{ t.subscribe }}</a>
+        <RouterLink :to="getLink('/submit')">{{ t.submit }}</RouterLink>
+
+        <div class="lang-switcher">
+          <select v-model="currentLang" class="lang-select">
+            <option value="default" disabled hidden>🌐 Language</option>
+            <option value="zh-TW">🌐 台灣正體</option>
+            <option value="zh-CN">🌐 中国简体</option>
+            <option value="en">🌐 English</option>
+            <option value="ja">🌐 日本語</option>
+            <option value="ko">🌐 한국어</option>
+          </select>
+        </div>
 
         <RouterLink :to="getLink('/search')" class="search-icon-btn" title="搜尋">
           <svg
@@ -120,7 +182,6 @@ const editLink = computed(() => {
   align-items: center;
 }
 
-/* ⭐ 修改處：後台模式 (editor-header) 增加左側內距，將內容往右推 2rem */
 .header.editor-header {
   background: linear-gradient(135deg, #2c3e50, #4ca1af);
   padding-left: calc(20px);
@@ -223,6 +284,34 @@ const editLink = computed(() => {
   background-color: #007bff;
   transform: translateY(-50%) scale(1.1);
 }
+
+/* ⭐ 語言切換器專屬樣式 */
+.lang-switcher {
+  margin-left: 10px;
+}
+
+.lang-select {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 5px;
+  padding: 4px 8px;
+  font-size: 0.95rem;
+  font-family: inherit;
+  cursor: pointer;
+  outline: none;
+  transition: all 0.3s ease;
+}
+
+.lang-select:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* 讓下拉選單展開時，裡面的選項字體顯示深色，避免被背景吃掉 */
+.lang-select option {
+  color: #333;
+}
+
 @media (max-width: 1024px) {
   .menu {
     gap: 10px;
@@ -238,7 +327,6 @@ const editLink = computed(() => {
     position: sticky;
     top: 0;
   }
-  /* 手機版移除額外的 padding，避免擠壓 */
   .header.editor-header {
     padding-left: 15px;
   }
@@ -282,6 +370,13 @@ const editLink = computed(() => {
   }
   .header-edit-btn {
     top: 30%;
+  }
+  .lang-switcher {
+    margin-left: 5px;
+  }
+  .lang-select {
+    padding: 4px;
+    font-size: 0.9rem;
   }
 }
 </style>

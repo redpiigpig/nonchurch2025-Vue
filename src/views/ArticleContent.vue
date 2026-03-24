@@ -6,40 +6,117 @@ import markedFootnote from "marked-footnote";
 import { supabase } from "../supabase";
 import MainLayout from "../components/MainLayout.vue";
 import { defineAsyncComponent } from "vue";
+import { useLanguage } from "../composables/useLanguage";
+import { useEditorMode } from "../composables/useEditorMode"; // 引入 isEditor 判斷草稿
 
 marked.use(markedFootnote({ prefixId: "footnote-" }));
 
 const route = useRoute();
+const { currentLang } = useLanguage();
+const { isEditor } = useEditorMode();
 const article = ref(null);
 const loading = ref(true);
 
 const issueImages = ref([]);
 
-// 處理底部導航點擊
+const contentTrans = {
+  "zh-TW": {
+    prev: "閱讀上一篇文章",
+    next: "閱讀下一篇文章",
+    backToToc: "回到本期雜誌目錄",
+    issuePrefix: "第",
+    issueSuffix: "期：",
+  },
+  "zh-CN": {
+    prev: "阅读上一篇文章",
+    next: "阅读下一篇文章",
+    backToToc: "回到本期杂志目录",
+    issuePrefix: "第",
+    issueSuffix: "期：",
+  },
+  en: {
+    prev: "Previous Article",
+    next: "Next Article",
+    backToToc: "Back to Table of Contents",
+    issuePrefix: "Vol.",
+    issueSuffix: ": ",
+  },
+  ja: {
+    prev: "前の記事を読む",
+    next: "次の記事を読む",
+    backToToc: "目次に戻る",
+    issuePrefix: "第",
+    issueSuffix: "号：",
+  },
+  ko: {
+    prev: "이전 기사 읽기",
+    next: "다음 기사 읽기",
+    backToToc: "목차로 돌아가기",
+    issuePrefix: "제",
+    issueSuffix: "호: ",
+  },
+};
+const t = computed(() => contentTrans[currentLang.value] || contentTrans["zh-TW"]);
+
 const handleNavClick = () => {
   const currentState = window.history.state || {};
   window.history.replaceState({ ...currentState, forceTop: true }, "");
 };
 
+// 用來解析 ID 後面的數字進行排序 (例如 1-10 -> 10)
+const getArticleOrder = (idStr) => {
+  if (!idStr) return 0;
+  const match = idStr.match(/-(\d+)/);
+  return match ? parseInt(match[1]) : parseInt(idStr) || 0;
+};
+
 const fetchArticleData = async (articleId) => {
   try {
-    const { data, error } = await supabase
+    // 1. 抓取當前文章資料
+    const { data: currentArt, error } = await supabase
       .from("articles")
-      .select("*")
+      .select("*, issues(id, title, translations)")
       .eq("id", articleId)
       .single();
 
     if (error) throw error;
 
+    // 2. 動態抓取「同期的所有文章」來計算上一篇/下一篇
+    let query = supabase
+      .from("articles")
+      .select("id, title, translations")
+      .eq("issue", currentArt.issue);
+
+    if (!isEditor.value) {
+      query = query.eq("is_published", true);
+    }
+
+    const { data: issueArticles, error: issueErr } = await query;
+
+    let prev = null;
+    let next = null;
+
+    if (!issueErr && issueArticles) {
+      // 將同期文章按照 ID 排序
+      issueArticles.sort((a, b) => getArticleOrder(a.id) - getArticleOrder(b.id));
+
+      const currentIndex = issueArticles.findIndex((a) => a.id === articleId);
+      if (currentIndex > 0) {
+        prev = issueArticles[currentIndex - 1]; // 取得上一篇
+      }
+      if (currentIndex !== -1 && currentIndex < issueArticles.length - 1) {
+        next = issueArticles[currentIndex + 1]; // 取得下一篇
+      }
+    }
+
     return {
-      ...data,
-      authorTitle: data.author_title,
-      issueTitle: data.issue_title,
-      prev: data.prev_article,
-      next: data.next_article,
-      footnotes: data.footnotes || [],
-      // 確保 media_data 存在，防止報錯
-      media_data: data.media_data || {},
+      ...currentArt,
+      authorTitle: currentArt.author_title,
+      issueTitle: currentArt.issue_title,
+      dynamicPrev: prev, // ⭐ 動態計算的上一篇
+      dynamicNext: next, // ⭐ 動態計算的下一篇
+      footnotes: currentArt.footnotes || [],
+      media_data: currentArt.media_data || {},
     };
   } catch (error) {
     console.error(`載入文章 ${articleId} 失敗:`, error.message);
@@ -55,16 +132,125 @@ const fetchIssueImages = async (issueNumber) => {
     offset: 0,
     sortBy: { column: "name", order: "asc" },
   });
-
-  if (!error && data) {
-    issueImages.value = data;
-  }
+  if (!error && data) issueImages.value = data;
 };
 
-const updateMetaTags = (seoData, article) => {
+// ⭐ 動態翻譯映射 (包含標題、作者、以及動態計算的上一篇/下一篇)
+const displayArticle = computed(() => {
+  if (!article.value) return null;
+  const langKey = currentLang.value === "default" ? "zh_TW" : currentLang.value.replace("-", "_");
+  const tArt = article.value.translations?.[langKey] || {};
+  const tIss = article.value.issues?.translations?.[langKey] || {};
+
+  // 處理上一篇的翻譯
+  let displayPrev = null;
+  if (article.value.dynamicPrev) {
+    const pTrans = article.value.dynamicPrev.translations?.[langKey] || {};
+    displayPrev = {
+      id: article.value.dynamicPrev.id,
+      title: pTrans.title || article.value.dynamicPrev.title,
+    };
+  }
+
+  // 處理下一篇的翻譯
+  let displayNext = null;
+  if (article.value.dynamicNext) {
+    const nTrans = article.value.dynamicNext.translations?.[langKey] || {};
+    displayNext = {
+      id: article.value.dynamicNext.id,
+      title: nTrans.title || article.value.dynamicNext.title,
+    };
+  }
+
+  return {
+    ...article.value,
+    title: tArt.title || article.value.title,
+    subtitle: tArt.subtitle || article.value.subtitle,
+    author: tArt.author_display || tArt.author || article.value.author,
+    authorTitle: tArt.author_title || article.value.authorTitle,
+    keyword: tArt.keyword || article.value.keyword,
+    remark: tArt.remark || article.value.remark,
+    issueTitle: tIss.title || article.value.issueTitle,
+    displayPrev, // ⭐ 傳入畫面
+    displayNext, // ⭐ 傳入畫面
+  };
+});
+
+// Category 翻譯
+const categoryTranslations = {
+  "zh-TW": {
+    專題文章: "專題文章",
+    評論與回應: "評論與回應",
+    人物專訪: "人物專訪",
+    生命故事: "生命故事",
+    時事感想: "時事感想",
+    文藝創作: "文藝創作",
+    公告與剪影: "公告與剪影",
+    封面故事: "封面故事",
+    光影時刻: "光影時刻",
+    實驗園地: "實驗園地",
+  },
+  "zh-CN": {
+    專題文章: "专题文章",
+    評論與回應: "评论与回应",
+    人物專訪: "人物专访",
+    生命故事: "生命故事",
+    時事感想: "时事感想",
+    文藝創作: "文艺创作",
+    公告與剪影: "公告与剪影",
+    封面故事: "封面故事",
+    光影時刻: "光影时刻",
+    實驗園地: "实验园地",
+  },
+  en: {
+    專題文章: "Feature",
+    評論與回應: "Review",
+    人物專訪: "Interview",
+    生命故事: "Life Story",
+    時事感想: "Current Affairs",
+    文藝創作: "Literature",
+    公告與剪影: "Notice",
+    封面故事: "Cover Story",
+    光影時刻: "Moments",
+    實驗園地: "Experimental",
+  },
+  ja: {
+    專題文章: "特集記事",
+    評論與回應: "評論と応答",
+    人物專訪: "インタビュー",
+    生命故事: "ライフストーリー",
+    時事感想: "時事コラム",
+    文藝創作: "文芸創作",
+    公告與剪影: "お知らせ",
+    封面故事: "カバーストーリー",
+    光影時刻: "光影の時",
+    實驗園地: "実験的創作",
+  },
+  ko: {
+    專題文章: "특집 기사",
+    評論與回應: "평론 및 응답",
+    人物專訪: "인터뷰",
+    生命故事: "삶의 이야기",
+    時事感想: "시사 칼럼",
+    文藝創作: "문예 창작",
+    公告與剪影: "공지사항",
+    封面故事: "커버 스토리",
+    光影時刻: "포토 스토리",
+    實驗園地: "실험적 창작",
+  },
+};
+
+const translatedCategory = computed(() => {
+  if (!displayArticle.value) return "";
+  const lang = currentLang.value === "default" ? "zh-TW" : currentLang.value;
+  return (
+    categoryTranslations[lang]?.[displayArticle.value.category] || displayArticle.value.category
+  );
+});
+
+const updateMetaTags = (seoData, currentArticle) => {
   if (!seoData) return;
   document.querySelectorAll("meta[data-seo]").forEach((el) => el.remove());
-
   const addMeta = (name, content, isProperty = false) => {
     if (!content) return;
     const meta = document.createElement("meta");
@@ -73,10 +259,9 @@ const updateMetaTags = (seoData, article) => {
     meta.setAttribute("data-seo", "true");
     document.head.appendChild(meta);
   };
-
   addMeta("description", seoData.description);
   addMeta("keywords", seoData.keywords);
-  addMeta("author", article.author);
+  addMeta("author", currentArticle.author);
   addMeta("robots", seoData.robots);
   addMeta("google-site-verification", seoData.googleVerification);
 
@@ -92,6 +277,14 @@ const updateMetaTags = (seoData, article) => {
   }
 };
 
+watch(displayArticle, (newArt) => {
+  if (newArt) {
+    const numberMatch = newArt.id.match(/^(\d+-\d+)/);
+    const numPrefix = numberMatch ? numberMatch[1] + " " : "";
+    document.title = `${numPrefix}${newArt.title} - 無境界者雜誌`;
+  }
+});
+
 watch(
   () => route.params.id,
   async (newId, oldId) => {
@@ -100,12 +293,8 @@ watch(
       const fetchedArticle = await fetchArticleData(newId);
       if (fetchedArticle) {
         article.value = fetchedArticle;
-        if (article.value.issue) {
-          await fetchIssueImages(article.value.issue);
-        }
+        if (article.value.issue) await fetchIssueImages(article.value.issue);
         updateMetaTags(article.value.seo, article.value);
-        const number = article.value.id.replace(article.value.title, "");
-        document.title = `${number} ${article.value.title} - 無境界者雜誌`;
       }
       loading.value = false;
     }
@@ -120,7 +309,6 @@ const specialComponentsMap = {
 const currentSpecialComponent = computed(() => {
   if (!article.value || article.value.type !== "special") return null;
   const matchKey = Object.keys(specialComponentsMap).find((key) => article.value.id.includes(key));
-
   return matchKey ? specialComponentsMap[matchKey] : null;
 });
 
@@ -130,9 +318,7 @@ onMounted(async () => {
     const localData = localStorage.getItem("preview_article");
     if (localData) {
       article.value = JSON.parse(localData);
-      if (article.value.issue) {
-        await fetchIssueImages(article.value.issue);
-      }
+      if (article.value.issue) await fetchIssueImages(article.value.issue);
       document.title = `[預覽] ${article.value.title}`;
       loading.value = false;
       return;
@@ -140,17 +326,12 @@ onMounted(async () => {
   }
 
   const articleId = route.params.id;
-  const fetchPromise = fetchArticleData(articleId);
-  const fetchedArticle = await fetchPromise;
+  const fetchedArticle = await fetchArticleData(articleId);
 
   if (fetchedArticle) {
     article.value = fetchedArticle;
-    if (article.value.issue) {
-      await fetchIssueImages(article.value.issue);
-    }
+    if (article.value.issue) await fetchIssueImages(article.value.issue);
     updateMetaTags(article.value.seo, article.value);
-    const number = article.value.id.replace(article.value.title, "");
-    document.title = `${number} ${article.value.title} - 無境界者雜誌`;
   } else {
     document.title = "找不到文章 - 無境界者雜誌";
   }
@@ -165,7 +346,6 @@ const formatTextWithFootnote = (text) => {
   });
 };
 
-// 1. 單純處理正文（不包含註釋）
 const htmlContent = computed(() => {
   if (!article.value || !article.value.content) return "";
   let fullText = article.value.content;
@@ -174,14 +354,10 @@ const htmlContent = computed(() => {
   });
 
   let parsedHtml = marked.parse(fullText, { gfm: true, breaks: true });
-
   parsedHtml = parsedHtml.replace(/src="([^"]+)"/g, (match, srcValue) => {
-    if (srcValue.startsWith("http") || srcValue.startsWith("data:") || srcValue.startsWith("//")) {
+    if (srcValue.startsWith("http") || srcValue.startsWith("data:") || srcValue.startsWith("//"))
       return match;
-    }
-    if (!issueImages.value || issueImages.value.length === 0) {
-      return match;
-    }
+    if (!issueImages.value || issueImages.value.length === 0) return match;
     const matchedFile = issueImages.value.find((file) => {
       const nameWithoutExt = file.name.substring(0, file.name.lastIndexOf(".")) || file.name;
       return file.name === srcValue || nameWithoutExt === srcValue;
@@ -194,39 +370,28 @@ const htmlContent = computed(() => {
     return match;
   });
 
-  return parsedHtml; // ⭐ 把原本這裡黏貼 footnotes 的邏輯拿掉了
+  return parsedHtml;
 });
 
-// 2. 獨立處理註釋區塊
 const footnotesHtml = computed(() => {
   if (!article.value || !article.value.footnotes || article.value.footnotes.length === 0) return "";
-
   const listItems = article.value.footnotes
     .map((note) => {
       return `<li id="footnote-${note.id}">
-        <p>
-          ${note.text}
-          <a href="#footnote-ref-${note.id}" class="footnote-backref">↩</a>
-        </p>
+        <p>${note.text}<a href="#footnote-ref-${note.id}" class="footnote-backref">↩</a></p>
       </li>`;
     })
     .join("");
-
-  return `
-    <div class="footnotes">
-      <hr />
-      <ol>${listItems}</ol>
-    </div>
-  `;
+  return `<div class="footnotes"><hr /><ol>${listItems}</ol></div>`;
 });
 
 const keywordContent = computed(() => {
-  if (!article.value || !article.value.keyword) return "";
-  return marked.parse(article.value.keyword);
+  if (!displayArticle.value || !displayArticle.value.keyword) return "";
+  return marked.parse(displayArticle.value.keyword);
 });
 
 const categoryColor = computed(() => {
-  if (!article.value || !article.value.category) return "#ff8000";
+  if (!displayArticle.value || !displayArticle.value.category) return "#ff8000";
   const colorMap = {
     專題文章: "#8b0000",
     評論與回應: "#ff8000",
@@ -239,17 +404,13 @@ const categoryColor = computed(() => {
     光影時刻: "#7d6c29",
     實驗園地: "#db7093",
   };
-  return colorMap[article.value.category] || "#ff8000";
+  return colorMap[displayArticle.value.category] || "#ff8000";
 });
 
 const issueLinkParams = computed(() => {
-  if (!article.value || !article.value.issue) return {};
-  const year = 2025 + Math.floor((article.value.issue - 1) / 6);
-  return {
-    path: "/articles",
-    query: { year: year },
-    hash: `#issue-${article.value.issue}`,
-  };
+  if (!displayArticle.value || !displayArticle.value.issue) return {};
+  const year = 2025 + Math.floor((displayArticle.value.issue - 1) / 6);
+  return { path: "/articles", query: { year: year }, hash: `#issue-${displayArticle.value.issue}` };
 });
 </script>
 
@@ -259,7 +420,7 @@ const issueLinkParams = computed(() => {
       正在載入文章內容 🕊️<span class="loading-dots"></span>
     </div>
 
-    <div v-else-if="!article" class="not-found">
+    <div v-else-if="!displayArticle" class="not-found">
       <h2>找不到這篇文章😖</h2>
       <RouterLink to="/articles" class="back-link">回文章列表</RouterLink>
     </div>
@@ -267,18 +428,18 @@ const issueLinkParams = computed(() => {
     <div v-else>
       <div class="title-header">
         <div
-          v-if="article.category"
+          v-if="displayArticle.category"
           class="featured-box"
           :style="{ backgroundColor: categoryColor }"
         >
-          {{ article.category }}
+          {{ translatedCategory }}
         </div>
 
-        <h1 class="main-title" v-html="formatTextWithFootnote(article.title)"></h1>
+        <h1 class="main-title" v-html="formatTextWithFootnote(displayArticle.title)"></h1>
         <h1
-          v-if="article.subtitle"
+          v-if="displayArticle.subtitle"
           class="sub-title"
-          v-html="'──' + formatTextWithFootnote(article.subtitle)"
+          v-html="'──' + formatTextWithFootnote(displayArticle.subtitle)"
         ></h1>
       </div>
 
@@ -288,66 +449,59 @@ const issueLinkParams = computed(() => {
 
       <div class="author-info">
         <p class="author-name">
-          <span v-html="formatTextWithFootnote(article.author)"></span>
-          <span class="author-title" v-html="formatTextWithFootnote(article.authorTitle)"></span>
+          <span v-html="formatTextWithFootnote(displayArticle.author)"></span>
           <span
-            v-if="article.remark"
+            class="author-title"
+            v-html="formatTextWithFootnote(displayArticle.authorTitle)"
+          ></span>
+          <span
+            v-if="displayArticle.remark"
             class="author-remark"
-            v-html="formatTextWithFootnote(article.remark)"
+            v-html="formatTextWithFootnote(displayArticle.remark)"
           ></span>
         </p>
       </div>
 
-      <div v-if="article.type === 'special' && currentSpecialComponent">
-        <div v-if="article.keyword" class="keyword-section" v-html="keywordContent"></div>
+      <div v-if="displayArticle.type === 'special' && currentSpecialComponent">
+        <div v-if="displayArticle.keyword" class="keyword-section" v-html="keywordContent"></div>
         <div v-if="htmlContent" class="audiobook-intro">
           <div class="markdown-body" v-html="htmlContent"></div>
         </div>
-
-        <component :is="currentSpecialComponent" :article="article" />
-
+        <component :is="currentSpecialComponent" :article="displayArticle" />
         <div v-if="footnotesHtml" class="markdown-body" v-html="footnotesHtml"></div>
       </div>
 
       <article v-else class="article-content">
-        <div v-if="article.keyword" class="keyword-section" v-html="keywordContent"></div>
+        <div v-if="displayArticle.keyword" class="keyword-section" v-html="keywordContent"></div>
         <br />
         <div class="markdown-body" v-html="htmlContent"></div>
         <div v-if="footnotesHtml" class="markdown-body" v-html="footnotesHtml"></div>
       </article>
+
       <div class="article-navigation">
         <div class="nav-item">
-          <template v-if="article.prev">
-            <strong>閱讀上一篇文章</strong>
-            <RouterLink
-              v-if="article.prev.id"
-              :to="`/articles/${article.prev.id}`"
-              @click="handleNavClick"
-            >
-              {{ article.prev.title }}
+          <template v-if="displayArticle.displayPrev">
+            <strong>{{ t.prev }}</strong>
+            <RouterLink :to="`/articles/${displayArticle.displayPrev.id}`" @click="handleNavClick">
+              {{ displayArticle.displayPrev.title }}
             </RouterLink>
-            <span v-else>{{ article.prev.title }}</span>
           </template>
         </div>
 
         <div class="nav-item">
-          <strong>回到本期雜誌目錄</strong>
+          <strong>{{ t.backToToc }}</strong>
           <RouterLink :to="issueLinkParams" @click="handleNavClick">
-            第{{ article.issue }}期：{{ article.issueTitle }}
+            {{ t.issuePrefix }}{{ displayArticle.issue }}{{ t.issueSuffix
+            }}{{ displayArticle.issueTitle }}
           </RouterLink>
         </div>
 
         <div class="nav-item">
-          <template v-if="article.next">
-            <strong>閱讀下一篇文章</strong>
-            <RouterLink
-              v-if="article.next.id"
-              :to="`/articles/${article.next.id}`"
-              @click="handleNavClick"
-            >
-              {{ article.next.title }}
+          <template v-if="displayArticle.displayNext">
+            <strong>{{ t.next }}</strong>
+            <RouterLink :to="`/articles/${displayArticle.displayNext.id}`" @click="handleNavClick">
+              {{ displayArticle.displayNext.title }}
             </RouterLink>
-            <span v-else>{{ article.next.title }}</span>
           </template>
         </div>
       </div>
@@ -356,12 +510,12 @@ const issueLinkParams = computed(() => {
 </template>
 
 <style scoped>
+/* 原有的樣式完全不變 */
 .audiobook-intro {
   margin-bottom: 3rem;
   padding-bottom: 2rem;
   border-bottom: 2px dashed #ccc;
 }
-
 .title-header {
   position: relative;
   margin-bottom: 20px;

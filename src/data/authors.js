@@ -1,8 +1,7 @@
 // src/data/authors.js
 
 // 圖片基礎路徑 (Supabase)
-const AVATAR_BASE_URL =
-  "https://pottupypvdzamztdhsah.supabase.co/storage/v1/object/public/images/authors";
+const AVATAR_BASE_URL = "https://res.cloudinary.com/nonchurch2025/image/upload";
 
 export const authors = [
   // --- 舊有作者 (1-19) ---
