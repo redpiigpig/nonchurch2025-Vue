@@ -10,7 +10,7 @@ const route = useRoute();
 const router = useRouter();
 
 const results = ref([]);
-const rawLatestArticles = ref([]); // 儲存最新一期的原始資料，供動態關鍵字使用
+const rawLatestArticles = ref([]);
 const loading = ref(false);
 const inputQuery = ref("");
 const inputType = ref("title");
@@ -19,6 +19,16 @@ const currentField = ref("title");
 
 const hotKeywords = ref([]);
 const latestIssueId = ref(null);
+
+// ⭐ 網站名稱多國語言字典 (用於 document.title)
+const siteNames = {
+  "zh-TW": "無境界者雜誌",
+  "zh-HK": "無境界者雜誌",
+  "zh-CN": "无境界者杂志",
+  en: "Faith Without Boundary",
+  ja: "無境界者雑誌",
+  ko: "무경계자 매거진",
+};
 
 // ⭐ 搜尋頁面多國語言字典
 const searchTranslations = {
@@ -40,6 +50,44 @@ const searchTranslations = {
     issuePrefix: (id, title) => `第${id}期：${title}`,
     authorPrefix: "作者：",
     keywordPrefix: "🌿 關鍵字：",
+  },
+  "zh-HK": {
+    title: "搜尋",
+    hot: (id) => `第 ${id} 期關鍵字：`,
+    optTitle: "搜尋文章標題",
+    optAuthor: "搜尋作者",
+    optContent: "搜尋文章全文",
+    optKeyword: "搜尋關鍵字",
+    placeholder: "請輸入搜尋內容...",
+    searchBtn: "搜尋",
+    hint: "💡 提示：支援模糊搜尋，請揀選欄位並輸入關鍵字。",
+    resultTitle: (q, f) => `用「${q}」搜尋${f}嘅結果`,
+    count: (c) => `${c} 筆`,
+    loading: "搜尋緊🕊️...",
+    noResult: "搵唔到相關內容，請嘗試其他關鍵字。",
+    clickHint: "撳入去睇文章全文",
+    issuePrefix: (id, title) => `第${id}期：${title}`,
+    authorPrefix: "作者：",
+    keywordPrefix: "🌿 關鍵字：",
+  },
+  "zh-CN": {
+    title: "搜索",
+    hot: (id) => `第 ${id} 期关键字：`,
+    optTitle: "搜索文章标题",
+    optAuthor: "搜索作者",
+    optContent: "搜索文章全文",
+    optKeyword: "搜索关键字",
+    placeholder: "请输入搜索内容...",
+    searchBtn: "搜索",
+    hint: "💡 提示：支持模糊搜索，请选择字段并输入关键字。",
+    resultTitle: (q, f) => `用“${q}”搜索${f}的结果`,
+    count: (c) => `${c} 笔`,
+    loading: "搜索中🕊️...",
+    noResult: "找不到相关内容，请尝试其他关键字。",
+    clickHint: "点击观看文章全文",
+    issuePrefix: (id, title) => `第${id}期：${title}`,
+    authorPrefix: "作者：",
+    keywordPrefix: "🌿 关键字：",
   },
   en: {
     title: "Search",
@@ -109,7 +157,6 @@ const fieldLabels = computed(() => ({
   keyword: t.value.optKeyword,
 }));
 
-// ⭐ 動態提取對應語言的關鍵字
 const extractKeywords = () => {
   if (!rawLatestArticles.value || rawLatestArticles.value.length === 0) return;
   const langKey = currentLang.value === "default" ? "zh_TW" : currentLang.value.replace("-", "_");
@@ -141,16 +188,13 @@ const fetchLatestKeywords = async () => {
       .eq("is_published", true)
       .order("id", { ascending: false })
       .limit(1);
-
     if (!issues || issues.length === 0) return;
     latestIssueId.value = issues[0].id;
-
     const { data: articles } = await supabase
       .from("articles")
-      .select("keyword, translations") // ⭐ 一定要撈 translations 才能動態切換
+      .select("keyword, translations")
       .eq("issue", latestIssueId.value)
       .eq("is_published", true);
-
     if (!articles) return;
     rawLatestArticles.value = articles;
     extractKeywords();
@@ -159,7 +203,17 @@ const fetchLatestKeywords = async () => {
   }
 };
 
-watch(currentLang, extractKeywords); // 當語言切換時重新抽取關鍵字
+// ⭐ 監聽語言切換，更新關鍵字與動態標題
+watch(
+  currentLang,
+  () => {
+    extractKeywords();
+    const activeLang = currentLang.value === "default" ? "zh-TW" : currentLang.value;
+    const siteName = siteNames[activeLang] || siteNames["zh-TW"];
+    document.title = `${t.value.title} - ${siteName}`;
+  },
+  { immediate: true },
+);
 
 const clickTag = (tag) => {
   inputQuery.value = tag;
@@ -172,7 +226,6 @@ const handleSearch = () => {
   router.push({ name: "search", query: { q: inputQuery.value, type: inputType.value } });
 };
 
-// ⭐ 使用 JSONB 深度搜尋，取代原本無法搜外文的 RPC
 const fetchResults = async () => {
   const q = route.query.q || "";
   const type = route.query.type || "title";
@@ -188,7 +241,7 @@ const fetchResults = async () => {
   loading.value = true;
   try {
     const langKey = currentLang.value === "default" ? "zh_TW" : currentLang.value.replace("-", "_");
-    const safeQ = q.replace(/'/g, "''"); // 避免 SQL 注入或語法錯誤
+    const safeQ = q.replace(/'/g, "''");
 
     let query = supabase
       .from("articles")
@@ -197,7 +250,6 @@ const fetchResults = async () => {
       )
       .eq("is_published", true);
 
-    // 透過 .or 穿透搜尋 translations JSONB 欄位
     if (type === "title") {
       query = query.or(
         `title.ilike.%${safeQ}%,subtitle.ilike.%${safeQ}%,translations->${langKey}->>title.ilike.%${safeQ}%,translations->${langKey}->>subtitle.ilike.%${safeQ}%`,
@@ -211,7 +263,7 @@ const fetchResults = async () => {
         `keyword.ilike.%${safeQ}%,translations->${langKey}->>keyword.ilike.%${safeQ}%`,
       );
     } else if (type === "content") {
-      query = query.ilike("content", `%${safeQ}%`); // 內文不翻譯，保留原始搜尋
+      query = query.ilike("content", `%${safeQ}%`);
     }
 
     const { data, error } = await query;
@@ -224,7 +276,6 @@ const fetchResults = async () => {
   }
 };
 
-// ⭐ 處理搜尋結果的動態多語系顯示
 const displayResults = computed(() => {
   const langKey = currentLang.value === "default" ? "zh_TW" : currentLang.value.replace("-", "_");
   return results.value.map((a) => {
@@ -274,7 +325,6 @@ const highlightSnippet = (content, searchTerm) => {
 
 watch(() => route.query, fetchResults);
 onMounted(() => {
-  document.title = "搜尋 - 無境界者雜誌";
   fetchLatestKeywords();
   fetchResults();
 });
@@ -321,8 +371,8 @@ onMounted(() => {
       <div v-if="currentKeyword">
         <div class="result-status">
           <h2>
-            {{ t.resultTitle(currentKeyword, fieldLabels[currentField]) }}
-            <span class="count-tag">{{ t.count(displayResults.length) }}</span>
+            {{ t.resultTitle(currentKeyword, fieldLabels[currentField])
+            }}<span class="count-tag">{{ t.count(displayResults.length) }}</span>
           </h2>
         </div>
         <div v-if="loading" class="loading-state">{{ t.loading }}</div>
@@ -371,7 +421,6 @@ onMounted(() => {
 </template>
 
 <style>
-/* 關鍵字反白樣式 */
 .highlight-text {
   color: #003366;
   font-weight: bold;

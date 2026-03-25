@@ -13,6 +13,16 @@ const router = useRouter();
 
 const selectedYear = ref(2025);
 
+// ⭐ 網站名稱多國語言字典 (用於 document.title)
+const siteNames = {
+  "zh-TW": "無境界者雜誌",
+  "zh-HK": "無境界者雜誌",
+  "zh-CN": "无境界者杂志",
+  en: "Faith Without Boundary",
+  ja: "無境界者雑誌",
+  ko: "무경계자 매거진",
+};
+
 // ⭐ 文章列表多國語言字典
 const listTranslations = {
   "zh-TW": {
@@ -27,6 +37,32 @@ const listTranslations = {
     download: "點擊封面下載PDF檔",
     footer1: "投稿資訊／下期主題",
     footer2: "編輯資訊／線上資訊",
+  },
+  "zh-HK": {
+    title: "文章列表",
+    selectYear: "揀選年份：",
+    opt2026: "2026 年 (第 7-12 期)",
+    opt2025: "2025 年 (第 1-6 期)",
+    loading: "載入緊文章列表 🕊️",
+    noData: (y) => `仲未有 ${y} 年嘅雜誌資料，敬請期待。🥺`,
+    issueTitle: (id, t) => `第 ${id} 期《${t}》`,
+    draft: "(期數草稿)",
+    download: "撳封面下載PDF檔",
+    footer1: "投稿資訊／下期主題",
+    footer2: "編輯資訊／網上資訊",
+  },
+  "zh-CN": {
+    title: "文章列表",
+    selectYear: "选择年份：",
+    opt2026: "2026 年 (第 7-12 期)",
+    opt2025: "2025 年 (第 1-6 期)",
+    loading: "正在载入文章列表 🕊️",
+    noData: (y) => `尚无 ${y} 年的杂志数据，敬请期待。🥺`,
+    issueTitle: (id, t) => `第 ${id} 期《${t}》`,
+    draft: "(期数草稿)",
+    download: "点击封面下载PDF档",
+    footer1: "投稿资讯／下期主题",
+    footer2: "编辑资讯／在线资讯",
   },
   en: {
     title: "Articles",
@@ -86,6 +122,26 @@ const categoryTranslations = {
     公告與剪影: "公告與剪影",
     封面故事: "封面故事",
   },
+  "zh-HK": {
+    專題文章: "專題文章",
+    評論與回應: "評論與回應",
+    人物專訪: "人物專訪",
+    生命故事: "生命故事",
+    時事感想: "時事感想",
+    文藝創作: "文藝創作",
+    公告與剪影: "公告與剪影",
+    封面故事: "封面故事",
+  },
+  "zh-CN": {
+    專題文章: "专题文章",
+    評論與回應: "评论与回应",
+    人物專訪: "人物专访",
+    生命故事: "生命故事",
+    時事感想: "时事感想",
+    文藝創作: "文艺创作",
+    公告與剪影: "公告与剪影",
+    封面故事: "封面故事",
+  },
   en: {
     專題文章: "Feature",
     評論與回應: "Review",
@@ -117,6 +173,7 @@ const categoryTranslations = {
     封面故事: "커버 스토리",
   },
 };
+
 const translateCategory = (cat) =>
   categoryTranslations[currentLang.value]?.[cat] || categoryTranslations["zh-TW"]?.[cat] || cat;
 
@@ -134,7 +191,9 @@ const extractOrderFromId = (idStr) => {
   if (match) return parseInt(match[1]);
   return parseInt(idStr) || 0;
 };
+
 const formatDisplayId = (num) => (num ? num.toString().padStart(2, "0") : "");
+
 const scrollToAnchor = async () => {
   if (route.hash) {
     await nextTick();
@@ -146,7 +205,6 @@ const scrollToAnchor = async () => {
 
 const fetchAndGroupArticles = async () => {
   loading.value = true;
-  // ⭐ 確保撈取文章的 translations 欄位
   let query = supabase
     .from("issues")
     .select(
@@ -231,7 +289,6 @@ const filteredIssues = computed(() =>
   groupedIssues.value.filter((i) => 2025 + Math.floor((i.id - 1) / 6) === selectedYear.value),
 );
 
-// ⭐ 動態映射當前語系的雜誌與文章資料
 const displayIssues = computed(() => {
   const langKey = currentLang.value === "default" ? "zh_TW" : currentLang.value.replace("-", "_");
 
@@ -263,11 +320,21 @@ const displayIssues = computed(() => {
   });
 });
 
+// ⭐ 監聽語言切換，動態改變網頁標題
+watch(
+  currentLang,
+  () => {
+    const activeLang = currentLang.value === "default" ? "zh-TW" : currentLang.value;
+    const siteName = siteNames[activeLang] || siteNames["zh-TW"];
+    document.title = `${t.value.title} - ${siteName}`;
+  },
+  { immediate: true },
+);
+
 watch(selectedYear, (newVal) => router.replace({ query: { ...route.query, year: newVal } }));
 watch(isEditor, fetchAndGroupArticles);
 
 onMounted(() => {
-  document.title = "文章列表 - 無境界者雜誌";
   fetchAndGroupArticles();
 });
 </script>
@@ -363,7 +430,6 @@ onMounted(() => {
 
 <style scoped>
 @import "@/assets/shared.css";
-/* 樣式保持不變 */
 h2 {
   text-align: left;
   color: #444;

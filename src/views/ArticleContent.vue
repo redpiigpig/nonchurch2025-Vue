@@ -7,7 +7,7 @@ import { supabase } from "../supabase";
 import MainLayout from "../components/MainLayout.vue";
 import { defineAsyncComponent } from "vue";
 import { useLanguage } from "../composables/useLanguage";
-import { useEditorMode } from "../composables/useEditorMode"; // 引入 isEditor 判斷草稿
+import { useEditorMode } from "../composables/useEditorMode";
 
 marked.use(markedFootnote({ prefixId: "footnote-" }));
 
@@ -19,6 +19,16 @@ const loading = ref(true);
 
 const issueImages = ref([]);
 
+// ⭐ 網站名稱多國語言字典 (用於 document.title)
+const siteNames = {
+  "zh-TW": "無境界者雜誌",
+  "zh-HK": "無境界者雜誌",
+  "zh-CN": "无境界者杂志",
+  en: "Faith Without Boundary",
+  ja: "無境界者雑誌",
+  ko: "무경계자 매거진",
+};
+
 const contentTrans = {
   "zh-TW": {
     prev: "閱讀上一篇文章",
@@ -26,6 +36,15 @@ const contentTrans = {
     backToToc: "回到本期雜誌目錄",
     issuePrefix: "第",
     issueSuffix: "期：",
+    browserTrans: "", // 繁體中文不顯示
+  },
+  "zh-HK": {
+    prev: "閱讀上一篇文章",
+    next: "閱讀下一篇文章",
+    backToToc: "返去今期雜誌目錄",
+    issuePrefix: "第",
+    issueSuffix: "期：",
+    browserTrans: "本文內容係用台灣繁體寫嘅，如果你偏好用粵語閱讀，可以使用瀏覽器翻譯功能。",
   },
   "zh-CN": {
     prev: "阅读上一篇文章",
@@ -33,6 +52,7 @@ const contentTrans = {
     backToToc: "回到本期杂志目录",
     issuePrefix: "第",
     issueSuffix: "期：",
+    browserTrans: "原文为繁体中文，建议使用浏览器的翻译功能以获得最佳阅读體驗。",
   },
   en: {
     prev: "Previous Article",
@@ -40,6 +60,8 @@ const contentTrans = {
     backToToc: "Back to Table of Contents",
     issuePrefix: "Vol.",
     issueSuffix: ": ",
+    browserTrans:
+      "The original text is in Traditional Chinese. Please use your browser's translation feature to read.",
   },
   ja: {
     prev: "前の記事を読む",
@@ -47,6 +69,7 @@ const contentTrans = {
     backToToc: "目次に戻る",
     issuePrefix: "第",
     issueSuffix: "号：",
+    browserTrans: "原文は繁体字中国語です。ブラウザの翻訳機能を利用してご覧ください。",
   },
   ko: {
     prev: "이전 기사 읽기",
@@ -54,6 +77,7 @@ const contentTrans = {
     backToToc: "목차로 돌아가기",
     issuePrefix: "제",
     issueSuffix: "호: ",
+    browserTrans: "원문은 번체 중국어입니다. 브라우저의 번역 기능을 사용하여 읽어주시기 바랍니다.",
   },
 };
 const t = computed(() => contentTrans[currentLang.value] || contentTrans["zh-TW"]);
@@ -63,7 +87,6 @@ const handleNavClick = () => {
   window.history.replaceState({ ...currentState, forceTop: true }, "");
 };
 
-// 用來解析 ID 後面的數字進行排序 (例如 1-10 -> 10)
 const getArticleOrder = (idStr) => {
   if (!idStr) return 0;
   const match = idStr.match(/-(\d+)/);
@@ -72,49 +95,33 @@ const getArticleOrder = (idStr) => {
 
 const fetchArticleData = async (articleId) => {
   try {
-    // 1. 抓取當前文章資料
     const { data: currentArt, error } = await supabase
       .from("articles")
       .select("*, issues(id, title, translations)")
       .eq("id", articleId)
       .single();
-
     if (error) throw error;
-
-    // 2. 動態抓取「同期的所有文章」來計算上一篇/下一篇
     let query = supabase
       .from("articles")
       .select("id, title, translations")
       .eq("issue", currentArt.issue);
-
-    if (!isEditor.value) {
-      query = query.eq("is_published", true);
-    }
-
+    if (!isEditor.value) query = query.eq("is_published", true);
     const { data: issueArticles, error: issueErr } = await query;
-
-    let prev = null;
-    let next = null;
-
+    let prev = null,
+      next = null;
     if (!issueErr && issueArticles) {
-      // 將同期文章按照 ID 排序
       issueArticles.sort((a, b) => getArticleOrder(a.id) - getArticleOrder(b.id));
-
       const currentIndex = issueArticles.findIndex((a) => a.id === articleId);
-      if (currentIndex > 0) {
-        prev = issueArticles[currentIndex - 1]; // 取得上一篇
-      }
-      if (currentIndex !== -1 && currentIndex < issueArticles.length - 1) {
-        next = issueArticles[currentIndex + 1]; // 取得下一篇
-      }
+      if (currentIndex > 0) prev = issueArticles[currentIndex - 1];
+      if (currentIndex !== -1 && currentIndex < issueArticles.length - 1)
+        next = issueArticles[currentIndex + 1];
     }
-
     return {
       ...currentArt,
       authorTitle: currentArt.author_title,
       issueTitle: currentArt.issue_title,
-      dynamicPrev: prev, // ⭐ 動態計算的上一篇
-      dynamicNext: next, // ⭐ 動態計算的下一篇
+      dynamicPrev: prev,
+      dynamicNext: next,
       footnotes: currentArt.footnotes || [],
       media_data: currentArt.media_data || {},
     };
@@ -127,22 +134,18 @@ const fetchArticleData = async (articleId) => {
 const fetchIssueImages = async (issueNumber) => {
   if (!issueNumber) return;
   const path = `articles/issue-${issueNumber}`;
-  const { data, error } = await supabase.storage.from("images").list(path, {
-    limit: 1000,
-    offset: 0,
-    sortBy: { column: "name", order: "asc" },
-  });
+  const { data, error } = await supabase.storage
+    .from("images")
+    .list(path, { limit: 1000, offset: 0, sortBy: { column: "name", order: "asc" } });
   if (!error && data) issueImages.value = data;
 };
 
-// ⭐ 動態翻譯映射 (包含標題、作者、以及動態計算的上一篇/下一篇)
 const displayArticle = computed(() => {
   if (!article.value) return null;
   const langKey = currentLang.value === "default" ? "zh_TW" : currentLang.value.replace("-", "_");
   const tArt = article.value.translations?.[langKey] || {};
   const tIss = article.value.issues?.translations?.[langKey] || {};
 
-  // 處理上一篇的翻譯
   let displayPrev = null;
   if (article.value.dynamicPrev) {
     const pTrans = article.value.dynamicPrev.translations?.[langKey] || {};
@@ -152,7 +155,6 @@ const displayArticle = computed(() => {
     };
   }
 
-  // 處理下一篇的翻譯
   let displayNext = null;
   if (article.value.dynamicNext) {
     const nTrans = article.value.dynamicNext.translations?.[langKey] || {};
@@ -171,14 +173,25 @@ const displayArticle = computed(() => {
     keyword: tArt.keyword || article.value.keyword,
     remark: tArt.remark || article.value.remark,
     issueTitle: tIss.title || article.value.issueTitle,
-    displayPrev, // ⭐ 傳入畫面
-    displayNext, // ⭐ 傳入畫面
+    displayPrev,
+    displayNext,
   };
 });
 
-// Category 翻譯
 const categoryTranslations = {
   "zh-TW": {
+    專題文章: "專題文章",
+    評論與回應: "評論與回應",
+    人物專訪: "人物專訪",
+    生命故事: "生命故事",
+    時事感想: "時事感想",
+    文藝創作: "文藝創作",
+    公告與剪影: "公告與剪影",
+    封面故事: "封面故事",
+    光影時刻: "光影時刻",
+    實驗園地: "實驗園地",
+  },
+  "zh-HK": {
     專題文章: "專題文章",
     評論與回應: "評論與回應",
     人物專訪: "人物專訪",
@@ -248,6 +261,10 @@ const translatedCategory = computed(() => {
   );
 });
 
+const showTranslationHint = computed(() => {
+  return currentLang.value !== "zh-TW" && currentLang.value !== "default";
+});
+
 const updateMetaTags = (seoData, currentArticle) => {
   if (!seoData) return;
   document.querySelectorAll("meta[data-seo]").forEach((el) => el.remove());
@@ -277,13 +294,19 @@ const updateMetaTags = (seoData, currentArticle) => {
   }
 };
 
-watch(displayArticle, (newArt) => {
-  if (newArt) {
-    const numberMatch = newArt.id.match(/^(\d+-\d+)/);
-    const numPrefix = numberMatch ? numberMatch[1] + " " : "";
-    document.title = `${numPrefix}${newArt.title} - 無境界者雜誌`;
-  }
-});
+watch(
+  [displayArticle, currentLang],
+  ([newArt, newLang]) => {
+    if (newArt) {
+      const numberMatch = newArt.id.match(/^(\d+-\d+)/);
+      const numPrefix = numberMatch ? numberMatch[1] + " " : "";
+      const activeLang = newLang === "default" ? "zh-TW" : newLang;
+      const siteName = siteNames[activeLang] || siteNames["zh-TW"];
+      document.title = `${numPrefix}${newArt.title} - ${siteName}`;
+    }
+  },
+  { immediate: true },
+);
 
 watch(
   () => route.params.id,
@@ -332,10 +355,7 @@ onMounted(async () => {
     article.value = fetchedArticle;
     if (article.value.issue) await fetchIssueImages(article.value.issue);
     updateMetaTags(article.value.seo, article.value);
-  } else {
-    document.title = "找不到文章 - 無境界者雜誌";
   }
-
   loading.value = false;
 });
 
@@ -369,7 +389,6 @@ const htmlContent = computed(() => {
     }
     return match;
   });
-
   return parsedHtml;
 });
 
@@ -377,9 +396,7 @@ const footnotesHtml = computed(() => {
   if (!article.value || !article.value.footnotes || article.value.footnotes.length === 0) return "";
   const listItems = article.value.footnotes
     .map((note) => {
-      return `<li id="footnote-${note.id}">
-        <p>${note.text}<a href="#footnote-ref-${note.id}" class="footnote-backref">↩</a></p>
-      </li>`;
+      return `<li id="footnote-${note.id}"><p>${note.text}<a href="#footnote-ref-${note.id}" class="footnote-backref">↩</a></p></li>`;
     })
     .join("");
   return `<div class="footnotes"><hr /><ol>${listItems}</ol></div>`;
@@ -434,13 +451,14 @@ const issueLinkParams = computed(() => {
         >
           {{ translatedCategory }}
         </div>
-
         <h1 class="main-title" v-html="formatTextWithFootnote(displayArticle.title)"></h1>
         <h1
           v-if="displayArticle.subtitle"
           class="sub-title"
           v-html="'──' + formatTextWithFootnote(displayArticle.subtitle)"
         ></h1>
+
+        <div v-if="showTranslationHint" class="translation-hint">💡 {{ t.browserTrans }}</div>
       </div>
 
       <div class="divider-thick"></div>
@@ -510,7 +528,6 @@ const issueLinkParams = computed(() => {
 </template>
 
 <style scoped>
-/* 原有的樣式完全不變 */
 .audiobook-intro {
   margin-bottom: 3rem;
   padding-bottom: 2rem;
@@ -774,5 +791,15 @@ const issueLinkParams = computed(() => {
     font-size: 1.5rem;
     color: #444;
   }
+}
+
+.translation-hint {
+  background-color: #f8f9fa;
+  border-left: 4px solid #ffc107;
+  padding: 10px 15px;
+  margin: 10px 2rem;
+  font-size: 0.95rem;
+  color: #666;
+  border-radius: 4px;
 }
 </style>

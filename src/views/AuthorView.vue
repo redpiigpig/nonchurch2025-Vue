@@ -11,6 +11,16 @@ const { currentLang } = useLanguage();
 const route = useRoute();
 const useRouterInstance = useRouter();
 
+// ⭐ 網站名稱多國語言字典 (用於 document.title)
+const siteNames = {
+  "zh-TW": "無境界者雜誌",
+  "zh-HK": "無境界者雜誌",
+  "zh-CN": "无境界者杂志",
+  en: "Faith Without Boundary",
+  ja: "無境界者雑誌",
+  ko: "무경계자 매거진",
+};
+
 const authorTranslations = {
   "zh-TW": {
     title: "專欄作者",
@@ -21,6 +31,26 @@ const authorTranslations = {
     noData: (y) => `尚無 ${y} 年的專欄作者資料，敬請期待。🥺`,
     hidden: "隱藏中",
     readMore: "閱讀此作者文章",
+  },
+  "zh-HK": {
+    title: "專欄作者",
+    selectYear: "揀選年份：",
+    opt2026: "2026 年專欄作者",
+    opt2025: "2025 年專欄作者",
+    loading: "載入緊作者資料...",
+    noData: (y) => `仲未有 ${y} 年嘅專欄作者資料，敬請期待。🥺`,
+    hidden: "隱藏緊",
+    readMore: "閱讀呢位作者嘅文章",
+  },
+  "zh-CN": {
+    title: "专栏作者",
+    selectYear: "选择年份：",
+    opt2026: "2026 年专栏作者",
+    opt2025: "2025 年专栏作者",
+    loading: "正在载入作者数据...",
+    noData: (y) => `尚无 ${y} 年的专栏作者数据，敬请期待。🥺`,
+    hidden: "隐藏中",
+    readMore: "阅读此作者文章",
   },
   en: {
     title: "Authors",
@@ -110,13 +140,25 @@ const displayAuthors = computed(() => {
   });
 });
 
+// ⭐ 監聽語言切換，動態改變網頁標題
+watch(
+  currentLang,
+  () => {
+    const activeLang = currentLang.value === "default" ? "zh-TW" : currentLang.value;
+    const siteName = siteNames[activeLang] || siteNames["zh-TW"];
+    document.title = `${t.value.title} - ${siteName}`;
+  },
+  { immediate: true },
+);
+
 watch(selectedYear, (newVal) => {
   useRouterInstance.replace({ query: { ...route.query, year: newVal } });
   updateAuthors();
 });
+
 watch(isEditor, fetchAuthors);
+
 onMounted(() => {
-  document.title = "專欄作者 - 無境界者雜誌";
   initYear();
   fetchAuthors();
 });
@@ -150,10 +192,7 @@ onMounted(() => {
         <div v-for="author in displayAuthors" :key="author.id" class="author-box">
           <div v-if="isEditor && !author.is_published" class="draft-badge">{{ t.hidden }}</div>
           <div class="author-info">
-            <div
-              class="author-image"
-              :style="{ backgroundImage: `url(${author.author_image})` }"
-            ></div>
+            <img :src="author.author_image" :alt="author.displayName" class="author-image" />
             <h2>{{ author.displayName }}</h2>
           </div>
           <div class="author-bio">
@@ -218,16 +257,19 @@ onMounted(() => {
   align-items: center;
   flex-shrink: 0;
 }
+
+/* ⭐ 新版 author-image 樣式 (針對 img 標籤) */
 .author-image {
   width: 160px;
   height: 160px;
   border-radius: 50%;
   margin-right: 20px;
   background-color: #e0e0e0;
-  background-size: cover;
-  background-position: center;
+  object-fit: cover; /* 讓圖片自動裁切填滿圓形 */
+  flex-shrink: 0; /* 絕對防止被旁邊長文字擠壓 */
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
+
 .author-info h2 {
   font-size: 1.5rem;
   margin: 0;

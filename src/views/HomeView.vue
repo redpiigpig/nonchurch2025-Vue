@@ -24,6 +24,17 @@ const isEmailCopied = ref(false);
 
 const dbAuthors = ref([]);
 
+// ⭐ 網站名稱多國語言字典 (用於 document.title)
+const siteNames = {
+  "zh-TW": "無境界者雜誌",
+  "zh-HK": "無境界者雜誌",
+  "zh-CN": "无境界者杂志",
+  en: "Faith Without Boundary",
+  ja: "無境界者雑誌",
+  ko: "무경계자 매거진",
+};
+
+// ⭐ 首頁區塊標題多國語言字典
 const homeTranslations = {
   "zh-TW": {
     mainTitle: "當期雜誌",
@@ -54,6 +65,38 @@ const homeTranslations = {
     readArticle: "閱讀本文",
     emailHint: "點擊複製 Email",
     emailCopied: "已複製！",
+    viewAuthor: "查看作者頁面", // ⭐ 新增：Hover 提示
+  },
+  "zh-HK": {
+    mainTitle: "今期雜誌",
+    reviewTitle: (n) => `第${n}期回顧`,
+    issueFormat: (n, title) => `第${n}期《${title}》`,
+    downloadPdf: "撳封面下載 PDF",
+    coverStory: "封面故事：",
+    special: "特稿專區",
+    theme: "主題廣場",
+    diverse: "多元講堂",
+    authors: "今期作者",
+    cfp: "徵稿公告",
+    subscribe: "網上訂閱",
+    subscribeDesc:
+      "《無境界者》雜誌係一個唔以教會為本位嘅自由信仰論述平台，亦係一個實驗性質嘅網上雜誌，會定期喺雙數月月底發刊。歡迎讀者留低你嘅電郵地址訂閱本雜誌，每期發刊時，編輯室就會將當月嘅連結同 PDF 檔 send 俾你！",
+    search: "搜尋",
+    contact: "聯絡我哋",
+    loading: "載入緊首頁 🕊️",
+    notFound: "搵唔到呢期雜誌資料 😖",
+    notFoundDesc: "可能仲未發布，敬請期待。",
+    backToLatest: "返去最新一期",
+    optTitle: "搜尋文章標題",
+    optAuthor: "搜尋作者",
+    optContent: "搜尋文章全文",
+    optKeyword: "搜尋關鍵字",
+    searchHint: "💡 提示：支援模糊搜尋，請揀選欄位並輸入關鍵字。",
+    searchPlaceholder: "請輸入搜尋內容...",
+    readArticle: "閱讀本文",
+    emailHint: "撳掣複製 Email",
+    emailCopied: "已經複製咗！",
+    viewAuthor: "睇作者頁面", // ⭐ 新增：Hover 提示
   },
   "zh-CN": {
     mainTitle: "当期杂志",
@@ -84,6 +127,7 @@ const homeTranslations = {
     readArticle: "阅读本文",
     emailHint: "点击复制 Email",
     emailCopied: "已复制！",
+    viewAuthor: "查看作者页面", // ⭐ 新增：Hover 提示
   },
   en: {
     mainTitle: "Current Issue",
@@ -114,6 +158,7 @@ const homeTranslations = {
     readArticle: "Read Article",
     emailHint: "Click to copy Email",
     emailCopied: "Copied!",
+    viewAuthor: "View Author Page", // ⭐ 新增：Hover 提示
   },
   ja: {
     mainTitle: "最新号",
@@ -144,6 +189,7 @@ const homeTranslations = {
     readArticle: "記事を読む",
     emailHint: "クリックしてEmailをコピー",
     emailCopied: "コピーしました！",
+    viewAuthor: "執筆者ページを見る", // ⭐ 新增：Hover 提示
   },
   ko: {
     mainTitle: "최신호",
@@ -174,6 +220,7 @@ const homeTranslations = {
     readArticle: "기사 읽기",
     emailHint: "클릭하여 이메일 복사",
     emailCopied: "복사되었습니다!",
+    viewAuthor: "작성자 페이지 보기", // ⭐ 新增：Hover 提示
   },
 };
 
@@ -181,6 +228,16 @@ const t = computed(() => homeTranslations[currentLang.value] || homeTranslations
 
 const categoryTranslations = {
   "zh-TW": {
+    專題文章: "專題文章",
+    評論與回應: "評論與回應",
+    人物專訪: "人物專訪",
+    生命故事: "生命故事",
+    時事感想: "時事感想",
+    文藝創作: "文藝創作",
+    公告與剪影: "公告與剪影",
+    封面故事: "封面故事",
+  },
+  "zh-HK": {
     專題文章: "專題文章",
     評論與回應: "評論與回應",
     人物專訪: "人物專訪",
@@ -430,6 +487,20 @@ const copyEmail = () => {
   });
 };
 
+// ⭐ 同時監聽語言與路由，動態更新標題
+watch(
+  [currentLang, () => route.params.issueNumber],
+  () => {
+    const activeLang = currentLang.value === "default" ? "zh-TW" : currentLang.value;
+    const siteName = siteNames[activeLang] || siteNames["zh-TW"];
+    const pageTitlePrefix = route.params.issueNumber
+      ? t.value.reviewTitle(route.params.issueNumber)
+      : t.value.mainTitle;
+    document.title = `${pageTitlePrefix} - ${siteName}`;
+  },
+  { immediate: true },
+);
+
 watch(
   () => route.params.issueNumber,
   () => loadTargetIssue(),
@@ -437,7 +508,6 @@ watch(
 watch(isEditor, () => fetchIssues());
 
 onMounted(async () => {
-  document.title = "無境界者雜誌";
   await fetchAuthors();
   fetchIssues();
 });
@@ -580,7 +650,9 @@ onMounted(async () => {
         <h2>✍️ {{ t.authors }}</h2>
         <div class="author-container">
           <div v-for="a in currentIssueAuthors" :key="a.id" class="author">
-            <router-link :to="'/authors/' + a.name"><img :src="a.author_image" /></router-link>
+            <router-link :to="'/authors/' + a.name" :data-tooltip="t.viewAuthor">
+              <img :src="a.author_image" />
+            </router-link>
             <h4>{{ a.displayName }}</h4>
           </div>
         </div>

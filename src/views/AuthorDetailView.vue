@@ -8,8 +8,18 @@ import { useLanguage } from "../composables/useLanguage";
 const { currentLang } = useLanguage();
 const route = useRoute();
 const author = ref(null);
-const rawAuthorArticles = ref([]); // ⭐ 存原始文章資料
+const rawAuthorArticles = ref([]);
 const loading = ref(true);
+
+// ⭐ 網站名稱多國語言字典 (用於 document.title)
+const siteNames = {
+  "zh-TW": "無境界者雜誌",
+  "zh-HK": "無境界者雜誌",
+  "zh-CN": "无境界者杂志",
+  en: "Faith Without Boundary",
+  ja: "無境界者雑誌",
+  ko: "무경계자 매거진",
+};
 
 const detailTrans = {
   "zh-TW": {
@@ -17,6 +27,18 @@ const detailTrans = {
     notFound: "找不到該位作者的資料 😖",
     clickFull: "（點擊看全文）",
     noArt: "這位作者目前還沒有發布文章。",
+  },
+  "zh-HK": {
+    loading: "載入緊作者資料...",
+    notFound: "搵唔到呢位作者嘅資料 😖",
+    clickFull: "（撳入去睇全文）",
+    noArt: "呢位作者目前仲未發布文章。",
+  },
+  "zh-CN": {
+    loading: "正在载入作者数据...",
+    notFound: "找不到该位作者的数据 😖",
+    clickFull: "（点击看全文）",
+    noArt: "这位作者目前还没有发布文章。",
   },
   en: {
     loading: "Loading...",
@@ -77,7 +99,6 @@ const fetchData = async () => {
   }
 };
 
-// ⭐ 動態翻譯作者名稱與簡介
 const displayAuthor = computed(() => {
   if (!author.value) return null;
   const langKey = currentLang.value === "default" ? "zh_TW" : currentLang.value.replace("-", "_");
@@ -89,7 +110,6 @@ const displayAuthor = computed(() => {
   };
 });
 
-// ⭐ 動態翻譯文章列表
 const displayArticles = computed(() => {
   const langKey = currentLang.value === "default" ? "zh_TW" : currentLang.value.replace("-", "_");
   return rawAuthorArticles.value.map((a) => {
@@ -107,9 +127,18 @@ const displayArticles = computed(() => {
   });
 });
 
-watch(displayAuthor, (newAuthor) => {
-  if (newAuthor) document.title = `${newAuthor.displayName} - 無境界者雜誌`;
-});
+// ⭐ 監聽語言與作者資料變化，動態更新標題
+watch(
+  [displayAuthor, currentLang],
+  ([newAuthor, newLang]) => {
+    if (newAuthor) {
+      const activeLang = newLang === "default" ? "zh-TW" : newLang;
+      const siteName = siteNames[activeLang] || siteNames["zh-TW"];
+      document.title = `${newAuthor.displayName} - ${siteName}`;
+    }
+  },
+  { immediate: true },
+);
 
 onMounted(fetchData);
 watch(() => route.params.name, fetchData);
@@ -142,7 +171,7 @@ watch(() => route.params.name, fetchData);
               ><span class="separator">｜</span><span class="date">{{ article.issueDate }}</span>
             </div>
             <h4 class="article-title-wrapper">
-              <router-link :to="`/articles/${article.id}`" class="title-link" title="點擊看全文">
+              <router-link :to="`/articles/${article.id}`" class="title-link" :title="t.clickFull">
                 <span class="main-title">{{ article.title }}</span
                 ><span v-if="article.subtitle" class="sub-title"> ──{{ article.subtitle }} </span>
                 <span class="click-hint">{{ t.clickFull }}</span>

@@ -22,6 +22,15 @@ const navTranslations = {
     submit: "投稿資訊",
     admin: "⚙️ 後台管理",
   },
+  "zh-HK": {
+    home: "首頁",
+    mission: "使命宣言",
+    articles: "文章列表",
+    authors: "專欄作者",
+    subscribe: "網上訂閱",
+    submit: "投稿資訊",
+    admin: "⚙️ 後台管理",
+  },
   "zh-CN": {
     home: "首页",
     mission: "使命宣言",
@@ -125,6 +134,7 @@ const editLink = computed(() => {
           <select v-model="currentLang" class="lang-select">
             <option value="default" disabled hidden>🌐 Language</option>
             <option value="zh-TW">🌐 台灣正體</option>
+            <option value="zh-HK">🌐 港澳粵語</option>
             <option value="zh-CN">🌐 中国简体</option>
             <option value="en">🌐 English</option>
             <option value="ja">🌐 日本語</option>

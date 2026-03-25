@@ -16,7 +16,17 @@ const { currentLang } = useLanguage();
 const allIssues = ref([]);
 const adminSelectedIssue = ref("");
 
-// ⭐ 投稿資訊多國語言字典 (包含 Green Island 和 Buddhism of Human Realm)
+// ⭐ 網站名稱多國語言字典 (用於 document.title)
+const siteNames = {
+  "zh-TW": "無境界者雜誌",
+  "zh-HK": "無境界者雜誌",
+  "zh-CN": "无境界者杂志",
+  en: "Faith Without Boundary",
+  ja: "無境界者雑誌",
+  ko: "무경계자 매거진",
+};
+
+// ⭐ 投稿資訊多國語言字典
 const subMap = {
   "zh-TW": {
     title: "投稿資訊",
@@ -80,6 +90,72 @@ const subMap = {
       {
         name: "實驗園地",
         desc: "各類實驗性創作，格式不拘，投稿前請先與編輯聯絡討論。",
+        color: "pink",
+      },
+    ],
+  },
+  "zh-HK": {
+    title: "投稿資訊",
+    loading: "載入緊投稿資訊 🕊️",
+    noData: "目前仲未有徵稿資訊。",
+    intro:
+      "《無境界者》雜誌係一個唔以教會為本位嘅自由信仰論述平台，亦係一個實驗性質嘅網上雜誌，會定期喺雙數月月底發刊。每一期都會有一個當期主題，投稿者可以按照當期主題投稿，亦可以自由發揮。",
+    nextTitle: "☆下期徵稿主題",
+    themePrefix: "徵稿主題：《",
+    themeSuffix: "》",
+    deadline: "📌 截稿期限：",
+    typeTitle: "☆投稿類型",
+    howTitle: "☆投稿方式",
+    rules: [
+      "想投稿嘅作者，請撳網頁下方嘅「我要投稿」，或者直接投稿至 nonchurch2025@gmail.com，作品可以匿名刊登，但投稿時依然需要喺電郵中附上真實姓名。初次投稿本刊物嘅作者請附上100-150字嘅信仰經歷簡介。",
+      "《無境界者》雜誌係一個喺網上公開嘅非牟利平台，所以喺度發表嘅作品都視為公開發表，而且恕未能提供稿酬。",
+      "投稿至《無境界者》雜誌嘅作品，可以係原創作品或者已經公開發表過嘅作品，但作者需要自負版權全責。",
+      "每一期嘅截稿期限為單數月月底（刊登嘅一個月前），投稿時請標明投稿嘅期數。",
+      "本刊物對於作品刊登與否具有最終裁量權。",
+    ],
+    submitZone: "投稿專區",
+    submitHint: "有精彩內容想分享？撳下方按鈕立即投稿！",
+    submitBtn: "我要投稿",
+    types: [
+      {
+        name: "專題文章",
+        desc: "探討當期主題或其他議題嘅學術性或半學術性文章，約1,000-6,000字。",
+        color: "red",
+      },
+      {
+        name: "評論與回應",
+        desc: "針對具有信仰啟發性嘅書籍、文章進行評論，或者回應本刊及其他信仰刊物嘅文章。約500-6,000字。",
+        color: "orange",
+      },
+      {
+        name: "人物專訪",
+        desc: "訪談對台灣教會史具獨特意義嘅人物，或者針對特殊議題採訪重要人物並記錄其見解。約2,000-12,000字。",
+        color: "yellow",
+      },
+      {
+        name: "生命故事",
+        desc: "個人生命經歷、日常信仰體悟，或者參與活動嘅心得分享。約500-6,000字。",
+        color: "green",
+      },
+      {
+        name: "時事感想",
+        desc: "對政治、社會、文化、教界時事嘅感想，或者書寫時事對信仰嘅啟發。約500-6,000字。",
+        color: "blue",
+      },
+      {
+        name: "文藝創作",
+        desc: "同信仰相關嘅詩詞、散文、短篇小說等創作。格式、篇幅不限。",
+        color: "indigo",
+      },
+      {
+        name: "公告與剪影",
+        desc: "友好團體活動公告或活動紀錄，可附海報、照片或相關連結。約500-2,000字。",
+        color: "purple",
+      },
+      { name: "光影時刻", desc: "以照片講述信仰故事，最多5張照片。文字500字以下。", color: "soil" },
+      {
+        name: "實驗園地",
+        desc: "各類實驗性創作，格式不拘，投稿前請先同編輯聯絡討論。",
         color: "pink",
       },
     ],
@@ -308,7 +384,6 @@ const subMap = {
 
 const t = computed(() => subMap[currentLang.value] || subMap["zh-TW"]);
 
-// ⭐ 核心：處理翻譯後的徵稿數據
 const translatedTheme = computed(() => {
   if (!currentTheme.value) return null;
   const lang = currentLang.value === "default" ? "zh-TW" : currentLang.value;
@@ -317,7 +392,6 @@ const translatedTheme = computed(() => {
 
   return {
     ...currentTheme.value,
-    // 優先使用翻譯欄位，沒有則用原始繁體
     cfp_title: trans?.cfp_title || currentTheme.value.cfp_title,
     cfp_theme: trans?.cfp_theme || currentTheme.value.cfp_theme,
   };
@@ -374,6 +448,17 @@ const handleAdminIssueChange = () => {
   router.push(targetPath);
 };
 
+// ⭐ 監聽語言切換，動態改變網頁標題
+watch(
+  currentLang,
+  () => {
+    const activeLang = currentLang.value === "default" ? "zh-TW" : currentLang.value;
+    const siteName = siteNames[activeLang] || siteNames["zh-TW"];
+    document.title = `${t.value.title} - ${siteName}`;
+  },
+  { immediate: true },
+);
+
 watch(() => route.params.issueNumber, fetchThemeData);
 watch(isEditor, () => {
   fetchThemeData();
@@ -381,7 +466,6 @@ watch(isEditor, () => {
 });
 
 onMounted(() => {
-  document.title = "投稿資訊 - 無境界者雜誌";
   fetchThemeData();
   if (isEditor.value) fetchAllIssues();
 });
@@ -462,8 +546,6 @@ onMounted(() => {
 
 <style scoped>
 @import "@/assets/shared.css";
-
-/* ⭐ 新增：後台工具列樣式 */
 .admin-toolbar {
   background-color: #fff3cd;
   padding: 15px;
