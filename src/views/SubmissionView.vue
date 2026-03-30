@@ -53,12 +53,12 @@ const subMap = {
     types: [
       {
         name: "專題文章",
-        desc: "探討當期主題或其他議題的學術性或半學術性文章，約1,000-6,000字。",
+        desc: "探討當期主題或其他議題的學術性或半學術性文章，約1,500-10,000字。",
         color: "red",
       },
       {
         name: "評論與回應",
-        desc: "針對具有信仰啟發性的書籍、文章進行評論，或回應本刊及其他信仰刊物的文章。約500-6,000字。",
+        desc: "針對具有信仰啟發性的書籍、文章進行評論，或回應本刊及其他信仰刊物的文章。約1,000-6,000字。",
         color: "orange",
       },
       {
@@ -85,6 +85,11 @@ const subMap = {
         name: "公告與剪影",
         desc: "友好團體活動公告或活動紀錄，可附海報、照片或相關連結。約500-2,000字。",
         color: "purple",
+      },
+      {
+        name: "文獻與翻譯",
+        desc: "整理並刊載具備重要歷史價值之書信、日記、未刊手稿，或引介外文經典、當代重要神學與哲學著作之譯稿。建議字數：2,000-8,000字（含譯序或導讀）。",
+        color: "teal",
       },
       { name: "光影時刻", desc: "以照片講述信仰故事，最多5張照片。文字500字以下。", color: "soil" },
       {
@@ -119,12 +124,12 @@ const subMap = {
     types: [
       {
         name: "專題文章",
-        desc: "探討當期主題或其他議題嘅學術性或半學術性文章，約1,000-6,000字。",
+        desc: "探討當期主題或其他議題嘅學術性或半學術性文章，約1,500-10,000字。",
         color: "red",
       },
       {
         name: "評論與回應",
-        desc: "針對具有信仰啟發性嘅書籍、文章進行評論，或者回應本刊及其他信仰刊物嘅文章。約500-6,000字。",
+        desc: "針對具有信仰啟發性嘅書籍、文章進行評論，或者回應本刊及其他信仰刊物嘅文章。約1,000-6,000字。",
         color: "orange",
       },
       {
@@ -151,6 +156,11 @@ const subMap = {
         name: "公告與剪影",
         desc: "友好團體活動公告或活動紀錄，可附海報、照片或相關連結。約500-2,000字。",
         color: "purple",
+      },
+      {
+        name: "文獻與翻譯",
+        desc: "整理並刊載具備重要歷史價值嘅書信、日記、未刊手稿，或引介外文經典、當代重要神學與哲學著作嘅譯稿。建議字數：2,000-8,000字（含譯序或導讀）。",
+        color: "teal",
       },
       { name: "光影時刻", desc: "以照片講述信仰故事，最多5張照片。文字500字以下。", color: "soil" },
       {
@@ -185,12 +195,12 @@ const subMap = {
     types: [
       {
         name: "专题文章",
-        desc: "探讨当期主题或其他议题的学术性或半学术性文章，约1,000-6,000字。",
+        desc: "探讨当期主题或其他议题的学术性或半学术性文章，约1,500-10,000字。",
         color: "red",
       },
       {
         name: "评论与回应",
-        desc: "针对具有信仰启发性的书籍、文章进行评论，或回应本刊及其他信仰刊物的文章。约500-6,000字。",
+        desc: "针对具有信仰启发性的书籍、文章进行评论， or 回应本刊及其他信仰刊物的文章。约1,000-6,000字。",
         color: "orange",
       },
       {
@@ -218,10 +228,15 @@ const subMap = {
         desc: "友好团体活动公告或活动记录，可附海报、照片或相关链接。约500-2,000字。",
         color: "purple",
       },
+      {
+        name: "文献与翻译",
+        desc: "整理并刊载具备重要历史价值之书信、日记、未刊手稿，或引介外文经典、当代重要神学与哲学著作之译稿。建议字数：2,000-8,000字（含译序或导读）。",
+        color: "teal",
+      },
       { name: "光影时刻", desc: "以照片讲述信仰故事，最多5张照片。文字500字以下。", color: "soil" },
       {
         name: "实验园地",
-        desc: "各类实验性创作，格式不拘，投稿前请先与编辑联絡讨论。",
+        desc: "各类实验性创作，格式不拘，投稿前请先与编辑聯絡讨论。",
         color: "pink",
       },
     ],
@@ -251,12 +266,12 @@ const subMap = {
     types: [
       {
         name: "Features",
-        desc: "Academic or semi-academic articles (1,000-6,000 words).",
+        desc: "Academic or semi-academic articles (1,500-10,000 words).",
         color: "red",
       },
       {
         name: "Reviews",
-        desc: "Reviews or responses to books/articles (500-6,000 words).",
+        desc: "Reviews or responses to books/articles (1,000-6,000 words).",
         color: "orange",
       },
       {
@@ -285,7 +300,12 @@ const subMap = {
         color: "purple",
       },
       {
-        name: "Moments",
+        name: "Documents & Translation",
+        desc: "Archival documents, letters, unpublished manuscripts, or translations of theological and philosophical classics. Suggested length: 2,000-8,000 words.",
+        color: "teal",
+      },
+      {
+        name: "Pictures",
         desc: "Faith stories told through up to 5 photos (Under 500 words).",
         color: "soil",
       },
@@ -319,8 +339,8 @@ const subMap = {
     submitHint: "素晴らしい記事をお待ちしております！",
     submitBtn: "投稿する",
     types: [
-      { name: "特集記事", desc: "学術的または半学術的な記事（1,000～6,000字）。", color: "red" },
-      { name: "評論と応答", desc: "書籍や他誌への書評・応答（500～6,000字）。", color: "orange" },
+      { name: "特集記事", desc: "学術的または半学術的な記事（1,500～10,000字）。", color: "red" },
+      { name: "評論と応答", desc: "書籍や他誌への書評・応答（1,000～6,000字）。", color: "orange" },
       {
         name: "インタビュー",
         desc: "重要な人物へのインタビュー（2,000～12,000字）。",
@@ -338,6 +358,11 @@ const subMap = {
       },
       { name: "文芸創作", desc: "詩、散文、小説などの創作活動（字数制限なし）。", color: "indigo" },
       { name: "お知らせ", desc: "友好団体の告知やイベント記録（500～2,000字）。", color: "purple" },
+      {
+        name: "文献と翻訳",
+        desc: "歴史価値のある書簡、日記、未刊稿、または神学・哲学の古典や現代重要著作の翻訳。推奨字数：2,000〜8,000字（導読を含む）。",
+        color: "teal",
+      },
       { name: "光影の時", desc: "写真で語る信仰の物語（5枚まで、500字以内）。", color: "soil" },
       { name: "実験的創作", desc: "形式自由。事前に編集部へご相談ください。", color: "pink" },
     ],
@@ -365,13 +390,18 @@ const subMap = {
     submitHint: "여러분의 이야기를 들려주세요!",
     submitBtn: "투고하기",
     types: [
-      { name: "특집 기사", desc: "학술 및 반학술적 기사 (1,000-6,000자).", color: "red" },
-      { name: "평론 및 응답", desc: "서평 및 응답 기사 (500-6,000자).", color: "orange" },
+      { name: "특집 기사", desc: "학술 및 반학술적 기사 (1,500-10,000자).", color: "red" },
+      { name: "평론 및 응답", desc: "서평 및 응답 기사 (1,000-6,000자).", color: "orange" },
       { name: "인터뷰", desc: "주요 인물 인터뷰 (2,000-12,000자).", color: "yellow" },
       { name: "삶의 이야기", desc: "개인적인 신앙 경험 (500-6,000자).", color: "green" },
       { name: "시사 칼럼", desc: "정치, 사회 관련 단상 (500-6,000자).", color: "blue" },
       { name: "문예 창작", desc: "신앙 관련 시, 소설 등 (분량 제한 없음).", color: "indigo" },
       { name: "공지사항", desc: "행사 공지 및 기록 (500-2,000자).", color: "purple" },
+      {
+        name: "문헌 및 번역",
+        desc: "역사적 가치가 있는 서신, 일기, 미발표 원고 또는 신학 및 철학 고전의 번역. 권장 분량: 2,000-8,000자(해제 또는 서문 포함).",
+        color: "teal",
+      },
       {
         name: "포토 스토리",
         desc: "사진으로 전하는 이야기 (5장 이내, 500자 이내).",
@@ -630,13 +660,12 @@ h3 {
   margin: 0 auto;
 }
 
-/* ⭐ 修改：截稿期限顏色 (桃紅色) */
 .deadline {
   text-align: right;
   font-weight: bold;
   margin-top: 2rem;
   margin-right: 10px;
-  color: #e91e63; /* 桃紅色 */
+  color: #e91e63;
 }
 
 .type-item {
@@ -693,6 +722,9 @@ h3 {
 .type-block.purple {
   background-color: #6a5acd;
 }
+.type-block.teal {
+  background-color: #008080;
+}
 .type-block.soil {
   background-color: #7d6c29;
 }
@@ -747,17 +779,14 @@ a:hover {
   text-indent: 0 !important;
 }
 
-/* ===========================
-   新增：載入動畫樣式
-   =========================== */
 .loading-state {
   display: flex;
   justify-content: center;
   align-items: center;
-  min-height: 50vh; /* 讓它垂直置中，高度佔畫面一半 */
-  font-size: 2rem; /* 字體大小 */
+  min-height: 50vh;
+  font-size: 2rem;
   color: #888;
-  font-family: serif; /* 如果想要跟內文一樣用襯線體 */
+  font-family: serif;
   font-weight: bold;
 }
 
