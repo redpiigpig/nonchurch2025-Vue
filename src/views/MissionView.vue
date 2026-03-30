@@ -9,7 +9,7 @@ onMounted(() => {
   document.title = "使命宣言 | Faith Without Boundary";
 });
 
-// ⭐ 翻譯內容字典 (已修正各國排版慣例)
+// ⭐ 翻譯內容字典 (已修正各國排版慣例，補上港澳粵語，並更新英日韓標題)
 const contentMap = {
   "zh-TW": {
     title: "使命宣言",
@@ -43,6 +43,43 @@ const contentMap = {
       {
         sub: "VII 對話｜Theology as a Dialogue",
         text: "　　我們認為，神學是一場與上帝和世界持續的對話，而非僵化的教條。我們鼓勵多元的聲音與開放的討論，與歷史、文化、世界和不同信仰觀點交流，在對話中深化對上帝與生命的理解。",
+      },
+    ],
+    author: "執筆者　張辰瑋",
+    date: "2025.02.09",
+  },
+  "zh-HK": {
+    title: "使命宣言",
+    intro:
+      "　　本刊物創辦嘅目的，係希望藉住參考生長喺東亞嘅無教會主義神學，對當代台灣嘅教會現象同信仰生活進行反思同對話，為信仰者／非信仰者嘅神學思考提供一個唔以教會為本位、自由發聲嘅平台。因此，本刊物按照無教會主義嘅精神同幾位共同發起人各自嘅信仰特徵，建構出以下七大核心關懷：",
+    points: [
+      {
+        sub: "I 歷史｜Faith Rooted in History",
+        text: "　　我哋認為，信仰同神學論述並唔係憑空而生，而係植根於歷史之中。我哋尊重教會嘅傳統，亦承認信仰嘅發展同時代變遷息息相關。我哋唔單止關注基督信仰嘅正統歷史，亦重視異端同邊緣神學嘅聲音，因為所有信仰實踐都源自歷史嘅累積同回應。",
+      },
+      {
+        sub: "II 自主｜The Call to Spiritual Autonomy",
+        text: "　　我哋認為，每位信仰者都應該承擔神學思考嘅責任，信仰係個人自主嘅回應，而唔係受制於權威嘅傳授。我哋拒絕盲從宗教體制，強調每個人都應該喺信仰中尋求真理，勇於面對屬靈嘅掙扎，並為自己嘅生命負責。",
+      },
+      {
+        sub: "III 知識｜The Pursuit of Wisdom and Understanding",
+        text: "　　我哋認為，知識係通往真理嘅門徑，信仰同理性並唔對立，而係相輔相成。我哋提倡，信仰者應該對呢個世界嘅各類知識抱持好奇心，因為唯有透過知識嘅拓展，我哋先可以更加接近真理，並且以智慧回應世界。",
+      },
+      {
+        sub: "IV 實況｜Faith in Context",
+        text: "　　我哋認為，信仰必須扎根喺時代同土地嘅實況，神學唔能夠脫離現實經驗。我哋承認，每個時代、文化、民族同個體都需要喺其獨特語境中建構信仰，令基督信仰成為「此時、此地、此人」嘅活潑見證。",
+      },
+      {
+        sub: "V 多元｜Embracing Diversity in Faith",
+        text: "　　我哋認為，上帝嘅創造廣大而多元，信仰亦應該反映呢種豐富性。我哋尊重唔同族群、文化、性別同宗教嘅多樣性，拒絕單一化同排他性嘅神學。我哋相信，唯有喺對話同交流之中，信仰先至可以展現佢真正嘅豐富同深度。",
+      },
+      {
+        sub: "VI 公眾｜Faith as a Public Responsibility",
+        text: "　　我哋認為，信仰唔單止係個人嘅靈性追求，更加係一種社會實踐。我哋關心政治、社會同生態，並視信仰為參與公共事務嘅力量。我哋拒絕將信仰商品化，亦反對將靈性侷限喺個人化嘅慰藉，而忽視對世界嘅責任。",
+      },
+      {
+        sub: "VII 對話｜Theology as a Dialogue",
+        text: "　　我哋認為，神學係一場同上帝同世界持續嘅對話，而唔係僵化嘅教條。我哋鼓勵多元嘅聲音同開放嘅討論，與歷史、文化、世界同唔同信仰觀點交流，喺對話中深化對上帝同生命嘅理解。",
       },
     ],
     author: "執筆者　張辰瑋",
@@ -86,12 +123,10 @@ const contentMap = {
     date: "2025.02.09",
   },
   en: {
-    title: "Mission Statement",
-    // ⭐ 英文取消全形空格，直接頂格
+    title: "Faith Without Boundary Mission Statement",
     intro:
       "The purpose of founding this publication is to draw upon the Non-Church Movement theology originating in East Asia to reflect on and engage in dialogue with contemporary church phenomena and faith life in Taiwan. It aims to provide a free-speaking platform for the theological reflection of believers and non-believers alike, one that is not church-centric. Therefore, based on the spirit of the Non-Church Movement and the diverse faith characteristics of its co-founders, this publication establishes the following seven core concerns:",
     points: [
-      // ⭐ 英文標題改為全形 ｜ 且無空格
       {
         sub: "I History｜Faith Rooted in History",
         text: "We believe that faith and theological discourse do not arise from a vacuum but are rooted in history. We respect church traditions and acknowledge that the development of faith is closely tied to changing times. We focus not only on the orthodox history of the Christian faith but also value the voices of heretical and marginal theologies.",
@@ -122,11 +157,10 @@ const contentMap = {
       },
     ],
     author: "Written by Thomas Chang",
-    // ⭐ 英文正式日期格式
     date: "February 9, 2025",
   },
   ja: {
-    title: "ミッション・ステートメント",
+    title: "無境界者使命宣言",
     intro:
       "　　本誌創刊の目的は、東アジアに生じた無教会主義神学を参考にしつつ、現代台湾の教会現象と信仰生活について反省と対話を行うことにあります。信者・非信者を問わず、教会中心主義にとらわれない自由な発言の場を提供することを目指しています。本誌は無教会主義の精神と共同発起人それぞれの信仰的特徴に基づき、以下の7つの核心的関心を掲げます：",
     points: [
@@ -159,13 +193,11 @@ const contentMap = {
         text: "　　神学とは神や世界との継続的な対話であり、硬直した教条ではないと考えます。私たちは多様な声と開かれた議論を奨励し、歴史、文化、世界、そして異なる信仰の視点と交流することで、神と生命への理解を深めていきます。",
       },
     ],
-    // ⭐ 日文保留漢字
     author: "執筆者　張辰瑋（Thomas Chang）",
     date: "2025.02.09",
   },
   ko: {
-    title: "사명 선언",
-    // ⭐ 韓文也取消全形空格，直接頂格
+    title: "무경계자 사명 선언",
     intro:
       "본 간행물의 창간 목적은 동아시아에서 자생한 무교회주의 신학을 참고하여, 현대 대만의 교회 현상과 신앙 생활에 대해 성찰하고 대화하는 데 있습니다. 신자와 비신자 모두의 신학적 사유를 위해, 교회 중심주의를 벗어난 자유로운 발언의 장을 제공하고자 합니다. 이에 본 간행물은 무교회주의 정신과 공동 발의자 각자의 신앙적 특징을 바탕으로 다음의 7대 핵심 관심사를 설정합니다:",
     points: [
@@ -222,7 +254,11 @@ const t = computed(() => contentMap[currentLang.value] || contentMap["zh-TW"]);
       <div class="mission-content">
         <template v-for="(point, index) in t.points" :key="index">
           <h3>{{ point.sub }}</h3>
-          <p :class="{ 'special-text': ['zh-TW', 'zh-CN', 'ja', 'default'].includes(currentLang) }">
+          <p
+            :class="{
+              'special-text': ['zh-TW', 'zh-HK', 'zh-CN', 'ja', 'default'].includes(currentLang),
+            }"
+          >
             {{ point.text }}
           </p>
         </template>

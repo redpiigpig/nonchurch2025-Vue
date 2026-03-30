@@ -317,15 +317,28 @@ const editLink = computed(() => {
   background: rgba(255, 255, 255, 0.3);
 }
 
-/* 讓下拉選單展開時，裡面的選項字體顯示深色，避免被背景吃掉 */
 .lang-select option {
   color: #333;
 }
 
 @media (max-width: 1024px) {
+  .header {
+    height: auto;
+    padding: 15px 20px;
+  }
+  .nav {
+    flex-direction: column;
+    gap: 15px;
+  }
   .menu {
-    gap: 10px;
-    margin-right: 3rem;
+    gap: 12px;
+    margin-right: 0;
+    width: 100%;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .header-edit-btn {
+    top: 40px;
   }
 }
 @media (max-width: 768px) {

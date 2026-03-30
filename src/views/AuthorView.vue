@@ -277,7 +277,8 @@ onMounted(() => {
   padding-right: 40px;
   font-weight: bold;
   font-family: "Times New Roman", serif;
-  white-space: nowrap;
+  word-break: break-word;
+  max-width: 250px;
 }
 .author-bio {
   flex: 1;
@@ -309,6 +310,35 @@ onMounted(() => {
   color: #2e7d32;
   text-decoration: underline;
 }
+
+@media (max-width: 1024px) {
+  .author-box {
+    align-items: flex-start;
+    padding: 30px;
+  }
+  .author-info {
+    flex-direction: column;
+    align-items: center;
+    width: 180px;
+    margin-right: 30px;
+    flex-shrink: 0;
+  }
+  .author-image {
+    margin-right: 0;
+    margin-bottom: 15px;
+  }
+  .author-info h2 {
+    padding-right: 0;
+    white-space: normal;
+    word-break: break-word;
+    text-align: center;
+    width: 100%;
+  }
+  .author-bio {
+    flex: 1;
+  }
+}
+
 @media (max-width: 768px) {
   .author-box {
     flex-direction: column;

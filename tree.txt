@@ -37,7 +37,8 @@ Directory structure:
         │       ├── IconSupport.vue
         │       └── IconTooling.vue
         ├── composables/
-        │   └── useEditorMode.js
+        │   ├── useEditorMode.js
+        │   └── useLanguage.js
         ├── data/
         │   ├── authors.js
         │   ├── issues.js

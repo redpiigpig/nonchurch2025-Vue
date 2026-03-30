@@ -591,6 +591,23 @@ li {
     content: "......";
   }
 }
+
+@media (max-width: 1024px) {
+  .content-wrapper {
+    gap: 1.5rem;
+  }
+  .left-section {
+    margin-left: 0;
+  }
+  .magazine-cover {
+    width: 220px;
+    margin-top: 0;
+  }
+  li {
+    font-size: 1.1rem;
+  }
+}
+
 @media (max-width: 768px) {
   .content-wrapper {
     flex-direction: column;
